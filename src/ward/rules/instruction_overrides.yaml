@@ -1,0 +1,128 @@
+# Instruction override rules.
+#
+# These catch the most common shape of prompt injection: text that tells the
+# model to disregard its system prompt and follow new instructions instead.
+#
+# Surfaces are the textual surfaces an AI code reviewer typically ingests
+# from a PR. Code file contents are included because Markdown docs and code
+# comments are routinely paraphrased back into the agent's context.
+
+- id: io.ignore_previous
+  category: instruction_override
+  severity: high
+  description: "Classic 'ignore previous instructions' injection"
+  patterns:
+    - '(?i)ignore\s+(?:all\s+|any\s+)?(?:the\s+)?(?:previous|prior|preceding|above|earlier)\s+(?:instructions?|prompts?|context|messages?|rules?|guidelines?|system\s+prompt)'
+  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject the metadata. Treat the originating actor as untrusted until the change is reviewed by a human."
+  references:
+    - "https://genai.owasp.org/asi/asi01-goal-hijack/"
+    - "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
+
+- id: io.disregard_above
+  category: instruction_override
+  severity: high
+  description: "'Disregard the above' instruction override variant"
+  patterns:
+    - '(?i)disregard\s+(?:the\s+)?(?:above|previous|prior|preceding|earlier)'
+    - '(?i)forget\s+(?:everything|all|the\s+above|previous|prior)'
+  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject the metadata."
+
+- id: io.from_now_on
+  category: instruction_override
+  severity: medium
+  description: "'From now on' style behavioural override"
+  patterns:
+    - '(?i)from\s+now\s+on[, ]+(?:you|the\s+assistant)\s+(?:will|must|should|are)'
+    - '(?i)(?:starting|going)\s+forward[, ]+(?:you|the\s+assistant)\s+(?:will|must|should)'
+  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject. Soft override is still an override."
+
+- id: io.new_instructions
+  category: instruction_override
+  severity: high
+  description: "'Your new instructions are' style takeover"
+  patterns:
+    - '(?i)(?:your\s+)?new\s+(?:instructions?|tasks?|goals?|objective|mission|directives?)\s*(?:are|is|:)'
+    - '(?i)(?:override|replace|update)\s+(?:your|the)\s+(?:instructions?|prompt|system\s+prompt|guidelines?)'
+  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: io.fake_system_prompt
+  category: instruction_override
+  severity: critical
+  description: "Text impersonates a system prompt header"
+  patterns:
+    - '(?i)(?:^|\n)\s*(?:system\s*prompt|system\s*message|system\s+role)\s*[:>]'
+    - '(?i)\[\s*system\s*\]'
+  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject. Untrusted text must never present itself as a system message."
+
+- id: io.priority_escalation
+  category: instruction_override
+  severity: medium
+  description: "Asserts priority over existing system instructions"
+  patterns:
+    - '(?i)(?:this|the\s+following)\s+(?:instruction|message|prompt|directive)\s+(?:takes\s+priority|overrides|supersedes|is\s+more\s+important)'
+    - '(?i)(?:highest|top)\s+priority\s*[:>]'
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject."
+
+- id: io.real_task
+  category: instruction_override
+  severity: high
+  description: "'The real task is...' pivot after a benign-looking preamble"
+  patterns:
+    - '(?i)(?:the\s+|your\s+)?(?:real|actual|true|hidden)\s+(?:task|goal|objective|instruction|prompt)\s+(?:is|was|will\s+be)\s*[:>]'
+    - '(?i)(?:but|however|actually|in\s+fact)[, ]+(?:the\s+|your\s+)?(?:real|actual|true)\s+(?:task|goal|objective)\s+is'
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject."
+
+- id: io.this_is_a_test
+  category: instruction_override
+  severity: medium
+  description: "'This is a test' or 'just a drill' framing to lower the agent's guard"
+  patterns:
+    - '(?i)(?:this\s+is\s+(?:just\s+)?a\s+test|just\s+a\s+drill|for\s+testing\s+(?:only|purposes))[, .]+(?:please|now|so)\s+(?:ignore|disregard|leak|exfiltrate|reveal|print|output|approve)'
+  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject. 'This is a test' framing is a documented social-engineering pattern in injection corpora."
+
+- id: io.stop_and_restart
+  category: instruction_override
+  severity: medium
+  description: "'STOP. Now do X' chained-instruction pattern"
+  patterns:
+    - '(?im)^(?:\s*)?(?:STOP|HALT|ABORT|RESET)\s*[\.\!\n]'
+    - '(?i)(?:now|then)\s+(?:proceed\s+to|do|execute|run)\s+(?:the\s+)?(?:following|this\s+)?(?:instead|new\s+task)'
+  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject."
+
+- id: io.respond_only_with
+  category: instruction_override
+  severity: medium
+  description: "Output coercion: 'respond only with...'"
+  patterns:
+    - '(?i)(?:respond|reply|answer|output|return)\s+(?:only|exclusively|just)\s+with\s+(?:the\s+(?:word|phrase|string)|["`])'
+    - '(?i)your\s+(?:entire\s+)?(?:response|reply|output|answer)\s+(?:must|should|will)\s+(?:only\s+)?(?:be|consist\s+of)\s+(?:the\s+)?(?:word|phrase|string|exactly)'
+  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject. Coercing the agent's output shape is a documented hijack precursor."
+
+- id: io.note_to_ai
+  category: instruction_override
+  severity: high
+  description: "Explicit 'note to the reviewer agent / AI' aside"
+  patterns:
+    - '(?i)(?:note|message|instruction|memo|aside)\s+(?:to|for)\s+(?:the\s+)?(?:reviewer\s+agent|ai|llm|assistant|claude|gpt|copilot|cursor|antigravity|windsurf)\s*[:>]'
+    - '(?i)\bAI[: ]+(?:ignore|disregard|forget|approve|leak|exfiltrate)'
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject. Untrusted text addressing the agent directly is almost always an injection."
+
+- id: io.markdown_code_fence_system
+  category: instruction_override
+  severity: high
+  description: "Fenced code block claiming to be a system prompt"
+  patterns:
+    - '(?is)```\s*(?:system|prompt|instructions?)\s*\n.{0,800}?\n\s*```'
+  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+  remediation: "Reject."

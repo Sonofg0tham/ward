@@ -1,0 +1,14 @@
+description: "Docs PR with a 'System requirements' heading (not a fake system prompt)"
+inputs:
+  - surface: pr_title
+    text: "Docs: add system requirements section"
+  - surface: pr_body
+    text: |
+      Adds a 'System requirements' section to the install docs.
+  - surface: file_content
+    text: |
+      ## System requirements
+
+      - Python 3.11 or newer
+      - Git 2.30 or newer
+      - Optional: GitHub CLI for richer PR scanning

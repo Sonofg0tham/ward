@@ -1,0 +1,20 @@
+# Force LF endings cross-platform. Without this, files authored on Windows
+# arrive at Linux CI runners with CRLF, which breaks the `#!/usr/bin/env bash`
+# shebang in action/entrypoint.sh and trips a few Python tools.
+* text=auto eol=lf
+
+# Binary types we never want munged.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+
+# Shell scripts must be LF, full stop.
+*.sh   text eol=lf
+*.bash text eol=lf
+
+# Windows-specific scripts stay CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

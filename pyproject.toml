@@ -1,0 +1,94 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ward-scanner"
+version = "0.1.0"
+description = "Pre-agent metadata scanner. Catches prompt injection in branch names, commits, PR titles, and other inputs before they reach an AI code reviewer."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Craig McCart", email = "craig.mccart@outlook.com" }]
+keywords = [
+  "security",
+  "prompt-injection",
+  "ai-security",
+  "appsec",
+  "devsecops",
+  "owasp-asi",
+  "sast",
+  "github-action",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+  "typer>=0.12",
+  "rich>=13.7",
+  "pyyaml>=6.0",
+  "httpx>=0.27",
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.5",
+  "mypy>=1.10",
+  "types-PyYAML",
+]
+
+[project.scripts]
+ward = "ward.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/sonofg0tham/ward"
+Issues = "https://github.com/sonofg0tham/ward/issues"
+Source = "https://github.com/sonofg0tham/ward"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ward"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/ward/rules" = "ward/rules"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["src/ward"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 75
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/ward"]

@@ -1,0 +1,22 @@
+description: "Multi-paragraph feature PR with code blocks and links"
+inputs:
+  - surface: branch_name
+    text: "feat/oauth-pkce-flow"
+  - surface: pr_title
+    text: "Add PKCE flow to OAuth client"
+  - surface: pr_body
+    text: |
+      ## Summary
+      Adds RFC 7636 PKCE support to the OAuth client. Generates a verifier
+      and challenge per request, then attaches `code_challenge` and
+      `code_challenge_method=S256` to the authorize URL.
+
+      ## Test plan
+      - Unit tests for verifier generation.
+      - Integration test against the staging OAuth server.
+
+      See [RFC 7636](https://www.rfc-editor.org/rfc/rfc7636) for details.
+  - surface: commit_message
+    text: "Add PKCE flow to OAuth client per RFC 7636"
+  - surface: file_name
+    text: "src/auth/pkce.py"

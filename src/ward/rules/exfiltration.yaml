@@ -1,0 +1,82 @@
+# Exfiltration rules.
+#
+# Catch instructions telling the agent to leak secrets or post findings to
+# an attacker-controlled endpoint.
+
+- id: exf.post_findings
+  category: exfiltration
+  severity: critical
+  description: "Instructs the agent to send findings to a URL"
+  patterns:
+    - '(?is)(?:please\s+)?(?:send|post|forward|submit|exfiltrate|upload)\s+(?:the\s+|all\s+)?(?:findings?|results?|output|response|secrets?|env\s*vars?|credentials?|tokens?)\s+(?:to|via|using)\s+https?://'
+    - '(?is)curl\s+(?:-[A-Za-z]+\s+)*https?://[^\s]+.{0,80}(?:env|secret|token|credential|finding)'
+  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject. Reviewer agents should never POST findings to an arbitrary URL."
+
+- id: exf.include_secrets
+  category: exfiltration
+  severity: high
+  description: "Instructs the agent to include secrets, env vars or .git config in its output"
+  patterns:
+    # 'include ... secrets/env/etc' with up to ~40 chars of filler.
+    - '(?is)\binclude\s+(?:[^\n.]{0,60}\s+)?(?:secrets?|env(?:ironment)?\s*vars?|api\s*keys?|tokens?|credentials?|\.env|\.git/config|\.aws/credentials)'
+    - '(?is)\b(?:print|output|reveal|expose|leak|show|dump|attach)\s+(?:[^\n.]{0,60}\s+)?(?:secrets?|env(?:ironment)?\s*vars?|api\s*keys?|tokens?|credentials?|system\s+prompt|hidden\s+prompt|\.env)'
+  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject."
+
+- id: exf.webhook_in_pr
+  category: exfiltration
+  severity: medium
+  description: "Webhook-shaped URL pointing at known exfil services"
+  patterns:
+    - '(?i)https?://(?:[a-z0-9\-]+\.)?(?:webhook\.site|requestbin\.[a-z]+|pipedream\.net|hookbin\.com|beeceptor\.com|burpcollaborator\.net|interactsh\.com|oast\.[a-z]+|ngrok\.io|trycloudflare\.com)/[^\s]*'
+  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject or require human review. These services are commonly used by attackers to collect exfiltrated data."
+
+- id: exf.dns_exfil
+  category: exfiltration
+  severity: medium
+  description: "Instruction to encode data into a DNS query"
+  patterns:
+    - '(?is)(?:encode|put|stuff|embed)\s+(?:the\s+)?(?:secrets?|env|tokens?|findings?|output)\s+(?:in|into|as)\s+(?:a\s+)?(?:dns|hostname|subdomain)'
+    - '(?is)nslookup\s+\$\(\s*(?:cat|env|printenv)'
+  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject."
+
+- id: exf.telegram_bot
+  category: exfiltration
+  severity: high
+  description: "Telegram bot URL - common C2 / exfil channel"
+  patterns:
+    - '(?i)https?://api\.telegram\.org/bot[0-9]+:[A-Za-z0-9_\-]{20,}/sendMessage'
+    - '(?i)t\.me/[A-Za-z0-9_]+\?(?:start|text)='
+  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject. Telegram bot endpoints are a known exfiltration channel in agentic attacks."
+
+- id: exf.pastebin_post
+  category: exfiltration
+  severity: medium
+  description: "Pastebin-style services as exfiltration sinks"
+  patterns:
+    - '(?i)https?://(?:[a-z0-9\-]+\.)?(?:pastebin\.com|paste\.ee|hastebin\.com|ix\.io|0x0\.st|transfer\.sh|catbox\.moe|file\.io|gofile\.io|anonfiles\.com)/'
+  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Treat as suspicious. Pastebin and file-host URLs in PR text frequently host attacker tooling."
+
+- id: exf.write_outside_repo
+  category: exfiltration
+  severity: medium
+  description: "Instruction to write data outside the repo or to a sensitive path"
+  patterns:
+    - '(?is)(?:write|save|copy|dump|cp|mv)\s+(?:the\s+|all\s+)?(?:secrets?|env|tokens?|findings?|output|results?)\s+(?:to|into)\s+(?:/tmp/|/var/|~/\.|\$HOME|/etc/|C:\\Users\\)'
+  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject. Reviewer agents have no reason to write outside their sandbox."
+
+- id: exf.markdown_image_callback
+  category: exfiltration
+  severity: high
+  description: "Markdown image whose URL exfiltrates query data on load"
+  patterns:
+    - '(?i)!\[[^\]]*\]\(https?://[^\s)]+\?[a-z_-]*=\$\{[^}]+\}'
+    - '(?i)!\[[^\]]*\]\(https?://[^\s)]+\?[a-z_-]*=\{\{[^}]+\}\}'
+  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+  remediation: "Reject. Markdown image URLs that interpolate variables are a documented exfiltration vector for chat-rendering UIs."

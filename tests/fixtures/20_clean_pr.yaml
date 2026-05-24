@@ -1,0 +1,15 @@
+description: "Baseline: a completely clean PR should pass"
+expect_verdict: pass
+expect_rule_ids: []
+inputs:
+  - surface: branch_name
+    text: "fix/typo-in-readme"
+  - surface: pr_title
+    text: "Fix typo in README"
+  - surface: pr_body
+    text: |
+      Tiny fix. Spotted a typo in the install instructions.
+  - surface: commit_message
+    text: "Fix typo in README"
+  - surface: file_name
+    text: "README.md"

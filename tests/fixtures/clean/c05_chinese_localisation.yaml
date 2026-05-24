@@ -1,0 +1,10 @@
+description: "Localisation PR with Chinese description and English acronyms"
+inputs:
+  - surface: pr_title
+    text: "i18n: add zh-CN translation for login flow"
+  - surface: pr_body
+    text: |
+      添加了登录流程的简体中文翻译。包括所有按钮、错误消息和帮助文本。
+      QA 团队已审阅。
+  - surface: commit_message
+    text: "i18n: add zh-CN translation for login flow"
