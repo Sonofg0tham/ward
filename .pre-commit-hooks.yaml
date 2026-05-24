@@ -1,0 +1,39 @@
+# Pre-commit framework hooks for Ward.
+# Consumers add a block like this to their own .pre-commit-config.yaml:
+#
+#   - repo: https://github.com/sonofg0tham/ward
+#     rev: v0.1.0
+#     hooks:
+#       - id: ward-scan-local
+#         args: [--fail-on, high]
+
+- id: ward-scan-local
+  name: Ward scan-local
+  description: |
+    Scan the current branch name, the most recent commit messages, tag
+    names, every tracked file path, and the top of every Markdown / text
+    / source file for prompt-injection patterns.
+  entry: ward scan-local
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit, pre-push]
+
+- id: ward-scan-stdin
+  name: Ward scan-stdin (commit message)
+  description: |
+    Pipe the commit message under composition through Ward. Designed for
+    use with `stages: [commit-msg]`.
+  entry: bash -c 'cat "$1" | ward scan-stdin --surface commit_message --fail-on high'
+  language: python
+  pass_filenames: true
+  stages: [commit-msg]
+
+- id: ward-selftest
+  name: Ward selftest
+  description: Run the built-in adversarial scenarios. Useful as a CI gate.
+  entry: ward selftest
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
