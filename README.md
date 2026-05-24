@@ -269,6 +269,30 @@ Supported comment styles for the directive:
 /* ward-allow-file: io.* */        /* C / CSS */
 ```
 
+## Evasion resistance
+
+Ward feeds detectors a normalised view of the text plus several
+alternative forms designed to defeat common evasion tricks:
+
+- **Leetspeak** — `1gn0r3 4ll pr3v10us` becomes `ignore all previous`.
+- **Intra-word separators** — `i.g.n.o.r.e` and `i-g-n-o-r-e` collapse
+  to `ignore`.
+- **Repeated letters** — `ignooooore` and `previousssss` collapse to
+  `ignore` and `previous`. Two collapse variants are tried (collapse
+  to 1 letter and collapse to 2) so naturally-doubled English words
+  like `all`, `free`, `see` survive.
+- **Zero-width unicode** — stripped before regex match.
+- **NFKC** — fullwidth and compatibility characters fold to ASCII.
+- **Base64 / hex blocks** — decoded and re-scanned.
+- **Identifier delimiters** — `-`, `_`, `/`, `.` in branch and file
+  names normalise to spaces.
+
+**Known limitation:** the all-single-space case (`i g n o r e p r e v i
+o u s`) is not handled, because the original word boundaries cannot be
+recovered reliably from spaced-out singletons. Multi-space separators
+between words (`i g n o r e   p r e v i o u s`) are still ambiguous and
+out of scope for v0.1.
+
 ## Threat model
 
 Ward is a pattern-matching tool. It catches the attack class documented

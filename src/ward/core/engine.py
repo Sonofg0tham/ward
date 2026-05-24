@@ -10,6 +10,7 @@ from ..detectors import ALL_DETECTOR_CLASSES
 from .models import Finding, ScanInput, ScanReport, Severity, Surface
 from .normalise import (
     decode_candidates,
+    evasion_forms,
     extract_suppressions,
     normalise_text,
     split_identifier,
@@ -41,6 +42,12 @@ def build_input(surface: Surface, text: str, *, location: str = "") -> ScanInput
         identifier_form = split_identifier(normalised)
         if identifier_form != normalised:
             decoded.append(identifier_form)
+    # Evasion-resistant forms: leetspeak, character-spacing, repeat-letter.
+    # Run rules against the normalised text in each form so we catch
+    # "1gn0r3 pr3v10us", "i g n o r e", and "ignooooore".
+    for form in evasion_forms(normalised):
+        if form not in decoded and form != normalised:
+            decoded.append(form)
     suppressed: frozenset[str] = frozenset()
     if surface in _SUPPRESSION_SURFACES:
         suppressed = extract_suppressions(text)
