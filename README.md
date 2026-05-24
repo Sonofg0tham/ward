@@ -154,6 +154,28 @@ real reviewer is the next step.
 Flags: `--output <path>`, `--no-write` (print to stdout),
 `--fail-on <severity>`.
 
+## Pre-commit hook
+
+If you use the [pre-commit](https://pre-commit.com/) framework, drop
+this into your `.pre-commit-config.yaml`:
+
+```yaml
+- repo: https://github.com/sonofg0tham/ward
+  rev: v0.1.0
+  hooks:
+    - id: ward-scan-local
+      args: [--fail-on, high]
+```
+
+Ward then runs on every `git commit` and `git push`, screening your
+branch name, commit messages, and tracked documentation files for
+injection patterns. Stops you committing a poisoned PR before it ever
+reaches GitHub.
+
+Other hook ids: `ward-scan-stdin` (designed for the `commit-msg`
+stage, screens the message you're typing), `ward-selftest` (manual,
+useful as a CI gate).
+
 ## GitHub Action
 
 Add it to a workflow in three lines:
