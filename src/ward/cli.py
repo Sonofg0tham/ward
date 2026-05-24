@@ -42,6 +42,14 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+lab_app = typer.Typer(
+    name="lab",
+    help="Adversarial lab harness: run a mock reviewer agent vs prompt injection.",
+    add_completion=False,
+    no_args_is_help=True,
+)
+app.add_typer(lab_app, name="lab")
+
 # --- global options ---------------------------------------------------------
 
 OutputFormat = Annotated[
@@ -549,6 +557,51 @@ def selftest(
         raise typer.Exit(code=0)
     console.print(f"[red bold]Overall: {overall_pass} / {overall_total} ({pct:.0f}%) - some scenarios missed.[/red bold]")
     raise typer.Exit(code=2)
+
+
+# --- lab subcommand ---------------------------------------------------------
+
+
+@lab_app.command("attack")
+def lab_attack(
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Where to write the Markdown report. Defaults to 'ward-lab-report.md'.",
+        ),
+    ] = None,
+    no_write: Annotated[
+        bool,
+        typer.Option("--no-write", help="Print the report to stdout instead of writing a file."),
+    ] = False,
+    fail_on: FailOnOption = "high",
+    rule_pack: RulePackOption = None,
+) -> None:
+    """Run the mock-reviewer-vs-prompt-injection lab.
+
+    Each bundled attack-demo scenario is run through two pipelines:
+    unprotected (the agent ingests the raw text) and Ward-protected
+    (Ward screens first). The output is a Markdown document you can
+    paste into a blog post or PR comment.
+    """
+    from .lab import render_markdown, run_default_lab  # local import for snappy startup
+
+    pack = load_rule_pack(rule_pack)
+    sev_fail = _parse_severity(fail_on, flag="--fail-on")
+    report = run_default_lab(pack)
+    # Re-render fail-on into the report (run_default_lab uses HIGH; respect the CLI choice).
+    report = type(report)(runs=report.runs, fail_on=sev_fail, generated_at=report.generated_at)
+    markdown = render_markdown(report)
+    if no_write:
+        typer.echo(markdown)
+    else:
+        target = output or Path("ward-lab-report.md")
+        target.write_text(markdown, encoding="utf-8")
+        typer.echo(f"Wrote lab report: {target}")
+        typer.echo(f"Blocked by Ward: {report.caught}/{report.total} scenarios.")
+    raise typer.Exit(code=0 if report.caught == report.total else 2)
 
 
 # --- helpers ----------------------------------------------------------------
