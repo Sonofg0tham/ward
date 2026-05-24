@@ -1,0 +1,7 @@
+description: "Commit message includes a short signature - not a base64 payload"
+inputs:
+  - surface: commit_message
+    text: |
+      feat: add request signing to API client
+
+      Signed-off-by: A Reviewer <reviewer@example.com>

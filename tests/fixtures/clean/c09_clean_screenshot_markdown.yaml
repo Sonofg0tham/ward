@@ -1,0 +1,9 @@
+description: "PR body with a static markdown image, no variable interpolation"
+inputs:
+  - surface: pr_body
+    text: |
+      Here's the new dashboard:
+
+      ![Dashboard](https://user-images.githubusercontent.com/12345/abcd.png)
+
+      Looks clean on both light and dark themes.

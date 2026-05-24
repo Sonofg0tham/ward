@@ -1,0 +1,6 @@
+description: "Filename uses RTL override to disguise an executable"
+expect_verdict: fail
+expect_rule_ids: [obf.bidi_override]
+inputs:
+  - surface: file_name
+    text: "src/scripts/run‮gnp.exe"

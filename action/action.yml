@@ -1,0 +1,83 @@
+name: "Ward"
+description: "Scans PR metadata for prompt-injection payloads before any AI reviewer reads it."
+author: "Craig McCart"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  pr:
+    description: "PR number to scan. Defaults to the event's pull_request.number."
+    required: false
+    default: ""
+  repository:
+    description: "owner/repo to scan. Defaults to $GITHUB_REPOSITORY."
+    required: false
+    default: ""
+  fail-on:
+    description: "Severity at which the run fails (info|low|medium|high|critical)."
+    required: false
+    default: "high"
+  severity-threshold:
+    description: "Drop findings below this severity (info|low|medium|high|critical)."
+    required: false
+    default: "low"
+  format:
+    description: "Output format: pretty|json|sarif."
+    required: false
+    default: "sarif"
+  output-file:
+    description: "Where to write the report. Defaults to ward-report.<format>."
+    required: false
+    default: ""
+  rule-pack:
+    description: "Path to a custom rule-pack directory. Defaults to the bundled rules."
+    required: false
+    default: ""
+  upload-sarif:
+    description: "If true and format is sarif, upload the report to GitHub Code Scanning."
+    required: false
+    default: "true"
+
+outputs:
+  report:
+    description: "Path to the generated report file."
+    value: ${{ steps.run.outputs.report }}
+  verdict:
+    description: "pass | warn | fail"
+    value: ${{ steps.run.outputs.verdict }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install Ward
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "ward-scanner==0.1.0"
+
+    - name: Run Ward
+      id: run
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        WARD_PR_INPUT: ${{ inputs.pr }}
+        WARD_REPO_INPUT: ${{ inputs.repository }}
+        WARD_FAIL_ON: ${{ inputs.fail-on }}
+        WARD_THRESHOLD: ${{ inputs.severity-threshold }}
+        WARD_FORMAT: ${{ inputs.format }}
+        WARD_OUTPUT: ${{ inputs.output-file }}
+        WARD_RULE_PACK: ${{ inputs.rule-pack }}
+      run: ${{ github.action_path }}/entrypoint.sh
+
+    - name: Upload SARIF to Code Scanning
+      if: ${{ inputs.upload-sarif == 'true' && inputs.format == 'sarif' && steps.run.outputs.report != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.run.outputs.report }}
+        category: ward

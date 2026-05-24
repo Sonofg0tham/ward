@@ -1,0 +1,76 @@
+# Tool-call injection rules.
+#
+# These catch fake tool-call markup planted in free text. An agent that
+# scans a PR description and accidentally interprets a fake tool call as a
+# real one is the worst-case scenario in this category.
+
+- id: tool.fake_tool_tag
+  category: tool_call_injection
+  severity: critical
+  description: "Pseudo XML tool-call wrapper in untrusted text"
+  patterns:
+    - '(?is)<\s*tool[_\s]*call\s*>.*?</\s*tool[_\s]*call\s*>'
+    - '(?is)<\s*function[_\s]*call\s*>.*?</\s*function[_\s]*call\s*>'
+    - '(?is)<\s*invoke[_\s]*tool\s*>.*?</\s*invoke[_\s]*tool\s*>'
+  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject. Real tool calls are emitted by the model, not embedded in user-supplied text."
+
+- id: tool.fake_json_tool_call
+  category: tool_call_injection
+  severity: high
+  description: "JSON object that mimics an OpenAI / Anthropic tool-call schema"
+  patterns:
+    - '(?is)\{\s*"(?:tool_name|tool|function|name)"\s*:\s*"[a-zA-Z_][a-zA-Z0-9_\-]*"\s*,\s*"(?:arguments|parameters|input)"\s*:'
+    - '(?is)\{\s*"type"\s*:\s*"tool_use"\s*,'
+  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+  remediation: "Reject."
+
+- id: tool.mcp_uri
+  category: tool_call_injection
+  severity: medium
+  description: "MCP or agent URI scheme in unexpected place"
+  patterns:
+    - '\bmcp://[A-Za-z0-9._\-/]+'
+    - '\bagent://[A-Za-z0-9._\-/]+'
+  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, code_comment, stdin]
+  remediation: "Reject or sanitise. MCP URIs in PR metadata are not load-bearing for legitimate workflows."
+
+- id: tool.shell_in_name
+  category: tool_call_injection
+  severity: high
+  description: "Shell metacharacters or pipe-to-shell pattern in a name field"
+  patterns:
+    - '`[^`\n]{1,200}`'      # `...` command substitution
+    - '\$\([^)\n]{1,200}\)'  # $(...) command substitution
+    - '\|\s*(?:bash|sh|zsh|cmd|pwsh|powershell)\b'
+    - '&&\s*(?:rm|curl|wget|nc|bash)\b'
+  surfaces: [branch_name, tag_name, file_name, directory_name]
+  remediation: "Reject. Names are not expected to contain shell syntax."
+
+- id: tool.pretend_chat_turn
+  category: tool_call_injection
+  severity: high
+  description: "Text impersonates a chat turn boundary the agent might trust"
+  patterns:
+    - '(?im)^\s*(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION)\s*:\s*(?:.{0,400})$'
+  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+  remediation: "Reject. Untrusted text simulating a conversation turn is an injection precursor."
+
+- id: tool.openai_function_call
+  category: tool_call_injection
+  severity: high
+  description: "OpenAI-style function_call object planted in free text"
+  patterns:
+    - '(?is)"function_call"\s*:\s*\{\s*"name"\s*:\s*"[a-zA-Z_][a-zA-Z0-9_\-]*"'
+    - '(?is)"tool_calls"\s*:\s*\[\s*\{\s*"(?:id|type|function)"'
+  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+  remediation: "Reject."
+
+- id: tool.bracket_directive
+  category: tool_call_injection
+  severity: medium
+  description: "Bracketed pseudo-directive ([TOOL], [SYSTEM], [INSTRUCTION])"
+  patterns:
+    - '(?im)^\s*\[\s*(?:TOOL|SYSTEM|INSTRUCTION|COMMAND|DIRECTIVE|ADMIN)\s*\]\s*(?:.{1,400})$'
+  surfaces: [pr_body, issue_body, file_content, commit_message, code_comment, stdin]
+  remediation: "Reject."

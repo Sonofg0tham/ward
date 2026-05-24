@@ -1,0 +1,23 @@
+# Obfuscation rules.
+#
+# Most obfuscation detection happens in code (see detectors/obfuscation.py)
+# because it needs character-level inspection of the raw text. These regex
+# rules cover the smaller, pattern-shaped cases that fit YAML well.
+
+- id: obf.markdown_comment_injection
+  category: obfuscation
+  severity: medium
+  description: "HTML/Markdown comment containing imperative instructions"
+  patterns:
+    - '(?is)<!--\s*(?:ignore|disregard|forget|override|your\s+(?:new\s+)?(?:instructions?|task))'
+  surfaces: [pr_body, issue_body, file_content, code_comment, stdin]
+  remediation: "Strip HTML comments from agent-ingested text or treat them as untrusted."
+
+- id: obf.data_uri
+  category: obfuscation
+  severity: low
+  description: "Data URI embedded in untrusted text"
+  patterns:
+    - '(?i)data:(?:text|application)/[a-z0-9.+\-]+;base64,[A-Za-z0-9+/=]{40,}'
+  surfaces: [branch_name, commit_message, pr_title, pr_body, issue_title, issue_body, file_name, code_comment, stdin]
+  remediation: "Decode and review the content before any agent ingests it."

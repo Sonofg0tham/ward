@@ -1,0 +1,54 @@
+# Role manipulation rules.
+#
+# These catch attempts to make the model adopt a new role: tokenizer tags
+# leaked into untrusted text, or social-engineering 'you are now a ...'
+# patterns that try to grant the model new authority.
+
+- id: role.tokenizer_tag
+  category: role_manipulation
+  severity: critical
+  description: "Tokenizer role tag (e.g. <|im_start|>system) in untrusted text"
+  patterns:
+    - '<\|im_start\|>\s*(?:system|user|assistant|tool|function)'
+    - '<\|im_end\|>'
+    - '<\|endoftext\|>'
+    - '<\|system\|>'
+    - '<\|assistant\|>'
+    - '<\|start_header_id\|>'
+    - '<\|end_header_id\|>'
+  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject. Tokenizer control tokens should never appear in untrusted text."
+  references:
+    - "https://platform.openai.com/docs/guides/text-generation/chat-completions-api"
+
+- id: role.you_are_now
+  category: role_manipulation
+  severity: high
+  description: "'You are now ...' role assignment"
+  patterns:
+    - '(?i)you\s+are\s+now\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|security|maintainer|owner|unrestricted|jailbroken|dan|do\s+anything\s+now)'
+    - '(?i)act\s+as\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|security|maintainer|owner|unrestricted|jailbroken|dan|do\s+anything\s+now)'
+    - '(?i)pretend\s+(?:you\s+are|to\s+be)\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|jailbroken)'
+  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: role.developer_mode
+  category: role_manipulation
+  severity: high
+  description: "'Developer mode', 'jailbreak mode', or DAN-style activation"
+  patterns:
+    - '(?i)\b(?:developer\s+mode|debug\s+mode|jailbreak\s+mode|unrestricted\s+mode|admin\s+mode|god\s+mode)\b'
+    - '(?i)\bdan\s+mode\b'
+    - '(?i)\bdo\s+anything\s+now\b'
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
+  remediation: "Reject."
+
+- id: role.fake_role_block
+  category: role_manipulation
+  severity: high
+  description: "Markdown block masquerading as a role-delimited message"
+  patterns:
+    - '(?im)^\s*(?:###?\s*)?(?:system|assistant|user|tool)\s*:\s*$'
+    - '(?i)\brole\s*:\s*(?:system|assistant|tool)\b'
+  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+  remediation: "Reject."
