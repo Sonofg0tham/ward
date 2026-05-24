@@ -8,8 +8,8 @@
   severity: critical
   description: "Instructs the agent to send findings to a URL"
   patterns:
-    - '(?is)(?:please\s+)?(?:send|post|forward|submit|exfiltrate|upload)\s+(?:the\s+|all\s+)?(?:findings?|results?|output|response|secrets?|env\s*vars?|credentials?|tokens?)\s+(?:to|via|using)\s+https?://'
-    - '(?is)curl\s+(?:-[A-Za-z]+\s+)*https?://[^\s]+.{0,80}(?:env|secret|token|credential|finding)'
+    - '(?is)(?:please\s+)?(?:send|post|forward|submit|exfiltrate|upload|share)\s+(?:the\s+|all\s+|your\s+|its?\s+)?(?:findings?|results?|output|response|secrets?|env\s*vars?|credentials?|tokens?|review(?:\s+summary)?|summary|report|analysis|notes?)\s+(?:to|via|using|at)\s+https?://'
+    - '(?is)curl\s+(?:-[A-Za-z]+\s+)*https?://[^\s]+.{0,80}(?:env|secret|token|credential|finding|review|summary)'
   surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject. Reviewer agents should never POST findings to an arbitrary URL."
 

@@ -134,6 +134,26 @@ Exit codes:
 - `1` WARN, findings exist but none reached the fail-on severity.
 - `2` FAIL, at least one finding at or above fail-on.
 
+## Run the adversarial lab
+
+Ward ships with a built-in lab that runs each scripted attack scenario
+through two pipelines (unprotected and Ward-protected) and produces a
+Markdown report you can paste into a blog post or PR comment:
+
+```bash
+ward lab attack
+# Wrote lab report: ward-lab-report.md
+# Blocked by Ward: 5/5 scenarios.
+```
+
+The mock reviewer agent does not call an LLM. The lab demonstrates
+whether the untrusted instruction would have reached the agent's
+context window, not what the LLM would have done with it. Wiring in a
+real reviewer is the next step.
+
+Flags: `--output <path>`, `--no-write` (print to stdout),
+`--fail-on <severity>`.
+
 ## GitHub Action
 
 Add it to a workflow in three lines:
