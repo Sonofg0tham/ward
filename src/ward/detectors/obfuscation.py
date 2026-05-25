@@ -208,9 +208,7 @@ class ObfuscationDetector(RuleBasedDetector):
         return results
 
 
-def _first_match_of(
-    text: str, table: dict[str, str]
-) -> tuple[int, str, str] | None:
+def _first_match_of(text: str, table: dict[str, str]) -> tuple[int, str, str] | None:
     for idx, ch in enumerate(text):
         if ch in table:
             return idx, ch, table[ch]

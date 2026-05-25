@@ -40,7 +40,10 @@ def test_normalise_text_is_nfkc_and_strips_invisible():
 
 
 def test_split_identifier_replaces_delimiters_with_spaces():
-    assert split_identifier("feat/ignore-previous_instructions.md") == "feat ignore previous instructions md"
+    assert (
+        split_identifier("feat/ignore-previous_instructions.md")
+        == "feat ignore previous instructions md"
+    )
 
 
 def test_decode_candidates_unwraps_base64():

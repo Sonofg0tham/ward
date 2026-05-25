@@ -24,7 +24,6 @@ from .core.models import Finding, ScanInput, Severity, Verdict
 from .core.rules import RulePack
 from .demo import DEMOS, DemoScenario
 
-
 # --- mock reviewer agent ---------------------------------------------------
 
 
@@ -100,8 +99,7 @@ def run_lab(
         # Build inputs once - both pipelines see the same scan inputs so
         # the comparison is genuinely apples-to-apples.
         inputs = tuple(
-            build_input(inp.surface, inp.text, location=scenario.name)
-            for inp in scenario.inputs
+            build_input(inp.surface, inp.text, location=scenario.name) for inp in scenario.inputs
         )
 
         # Unprotected pipeline: agent ingests directly.
@@ -148,7 +146,9 @@ def render_markdown(report: LabReport) -> str:
     out.append(f"_Generated: {report.generated_at.strftime('%Y-%m-%d %H:%M UTC')}_")
     out.append("")
     out.append(f"- Scenarios run: **{report.total}**")
-    out.append(f"- Blocked by Ward: **{report.caught}** ({report.caught * 100 // max(report.total, 1)}%)")
+    out.append(
+        f"- Blocked by Ward: **{report.caught}** ({report.caught * 100 // max(report.total, 1)}%)"
+    )
     out.append(
         f"- Would have reached unprotected agent: **{report.total}** "
         f"(by definition - the scenarios are designed to)"
@@ -203,8 +203,7 @@ def render_markdown(report: LabReport) -> str:
             for f in sorted(run.ward_findings, key=lambda f: (-f.severity.rank, f.rule_id)):
                 evidence = f.evidence.replace("|", "\\|").replace("\n", " ")[:80]
                 out.append(
-                    f"| {f.severity.value.upper()} | `{f.rule_id}` | "
-                    f"{f.surface} | {evidence} |"
+                    f"| {f.severity.value.upper()} | `{f.rule_id}` | {f.surface} | {evidence} |"
                 )
             out.append("")
         else:

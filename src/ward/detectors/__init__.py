@@ -8,7 +8,7 @@ from .obfuscation import ObfuscationDetector
 from .role_manipulation import RoleManipulationDetector
 from .tool_call_injection import ToolCallInjectionDetector
 
-ALL_DETECTOR_CLASSES: tuple[type[Detector], ...] = (
+ALL_DETECTOR_CLASSES: tuple[type[RuleBasedDetector], ...] = (
     InstructionOverrideDetector,
     ObfuscationDetector,
     ToolCallInjectionDetector,
@@ -18,13 +18,13 @@ ALL_DETECTOR_CLASSES: tuple[type[Detector], ...] = (
 )
 
 __all__ = [
+    "ALL_DETECTOR_CLASSES",
+    "AIToolSpecificDetector",
     "Detector",
-    "RuleBasedDetector",
+    "ExfiltrationDetector",
     "InstructionOverrideDetector",
     "ObfuscationDetector",
-    "ToolCallInjectionDetector",
     "RoleManipulationDetector",
-    "ExfiltrationDetector",
-    "AIToolSpecificDetector",
-    "ALL_DETECTOR_CLASSES",
+    "RuleBasedDetector",
+    "ToolCallInjectionDetector",
 ]

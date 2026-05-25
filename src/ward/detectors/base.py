@@ -51,10 +51,7 @@ class RuleBasedDetector(Detector):
         self._rules: tuple[Rule, ...] = rule_pack.by_category(self.category)
 
     def _texts_for(self, source: ScanInput) -> list[str]:
-        if self.matches_against == "raw":
-            texts = [source.raw]
-        else:
-            texts = [source.normalised]
+        texts = [source.raw] if self.matches_against == "raw" else [source.normalised]
         # Always also scan any decoded base64/hex payloads. This lets a regex
         # rule catch instructions hidden inside an obfuscated blob.
         texts.extend(source.decoded)

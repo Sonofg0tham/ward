@@ -13,7 +13,6 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
-
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -258,9 +257,9 @@ def scan_local(
             inputs.append(build_input("code_comment", top, location=f"{relname}:top"))
 
     target = f"local:{repo}"
-    sha = head_sha(repo)
-    if sha:
-        target += f"@{sha[:8]}"
+    head = head_sha(repo)
+    if head:
+        target += f"@{head[:8]}"
     code = _run(
         inputs,
         target=target,
@@ -274,9 +273,7 @@ def scan_local(
 
 @app.command("scan-pr")
 def scan_pr(
-    ref: Annotated[
-        str, typer.Argument(help="PR reference, e.g. 'sonofg0tham/ward#42'.")
-    ],
+    ref: Annotated[str, typer.Argument(help="PR reference, e.g. 'sonofg0tham/ward#42'.")],
     fmt: OutputFormat = "pretty",
     threshold: ThresholdOption = "low",
     fail_on: FailOnOption = "high",
@@ -522,7 +519,9 @@ def selftest(
         report = scan_inputs(inputs, pack, target=scenario.name)
         fired = {f.rule_id for f in report.findings}
         ok = scenario.expect_rule in fired
-        verdict_cell = "[green]PASS[/green]" if ok else f"[red]MISS[/red] (got {sorted(fired) or 'nothing'})"
+        verdict_cell = (
+            "[green]PASS[/green]" if ok else f"[red]MISS[/red] (got {sorted(fired) or 'nothing'})"
+        )
         table.add_row(
             scenario.name,
             scenario.category,
@@ -553,9 +552,13 @@ def selftest(
 
     pct = (overall_pass / overall_total * 100) if overall_total else 0.0
     if overall_pass == overall_total:
-        console.print(f"[green bold]Overall: {overall_pass} / {overall_total} ({pct:.0f}%) - all scenarios detected.[/green bold]")
+        console.print(
+            f"[green bold]Overall: {overall_pass} / {overall_total} ({pct:.0f}%) - all scenarios detected.[/green bold]"
+        )
         raise typer.Exit(code=0)
-    console.print(f"[red bold]Overall: {overall_pass} / {overall_total} ({pct:.0f}%) - some scenarios missed.[/red bold]")
+    console.print(
+        f"[red bold]Overall: {overall_pass} / {overall_total} ({pct:.0f}%) - some scenarios missed.[/red bold]"
+    )
     raise typer.Exit(code=2)
 
 

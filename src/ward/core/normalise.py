@@ -162,6 +162,7 @@ def decompose_spaced_runs(text: str) -> str:
     The all-single-spaces case ("i g n o r e p r e v i o u s") is NOT
     handled here because word boundaries cannot be recovered reliably.
     """
+
     def _collapse(match: re.Match[str]) -> str:
         return re.sub(r"[\.\-_·]", "", match.group(0))
 
