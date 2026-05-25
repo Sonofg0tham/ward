@@ -32,6 +32,7 @@ from .core.git_metadata import (
 from .core.github_api import GitHubError, fetch_pr_metadata, parse_pr_ref
 from .core.models import ScanInput, ScanReport, Severity, Surface
 from .core.rules import RulePack, load_rule_pack
+from .core.wardignore import is_ignored, load_patterns
 from .reporters import render_json, render_pretty, render_sarif
 
 app = typer.Typer(
@@ -237,10 +238,16 @@ def scan_local(
         inputs.append(build_input("commit_message", msg, location=f"commit:{sha[:8]}"))
     for tag in tag_names(repo):
         inputs.append(build_input("tag_name", tag, location=f"tag:{tag}"))
+    ignore_patterns = load_patterns(repo)
     for path in walk_tracked_files(repo):
         suffix = path.suffix.lower()
         relname = str(path.relative_to(repo))
         inputs.append(build_input("file_name", relname, location=relname))
+        # .wardignore matches mean we still scan the path (a malicious filename
+        # is still suspicious even in an ignored directory) but skip the
+        # potentially-noisy content scan.
+        if is_ignored(relname, ignore_patterns):
+            continue
         if suffix in DOC_SUFFIXES:
             try:
                 content = path.read_text(encoding="utf-8", errors="replace")

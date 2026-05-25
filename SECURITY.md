@@ -1,3 +1,5 @@
+<!-- ward-allow-file: io.*, role.*, exf.*, tool.*, ait.*, obf.* -->
+
 # Security Policy
 
 ## Threat Model

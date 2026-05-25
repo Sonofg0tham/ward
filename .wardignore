@@ -1,0 +1,25 @@
+# .wardignore - paths whose content scan-local should skip.
+#
+# Filenames are still scanned (a malicious filename in an ignored directory
+# is still suspicious). Only file_content / code_comment scanning is
+# suppressed.
+#
+# A security tool that documents and tests the attacks it catches will
+# inevitably trigger its own rules. The ward-allow-file directive handles
+# documentation files (README, SECURITY.md). The .wardignore here covers
+# Ward's own source tree and the deliberately-adversarial test fixtures.
+
+# Ward's own source tree. Source files contain docstrings describing the
+# attack patterns; rule YAMLs describe the rules; selftest and demo
+# modules embed example attacks.
+src/ward/*
+src/ward/**/*
+
+# Test fixtures are intentionally adversarial. Test modules contain attack
+# strings as parametrised inputs.
+tests/fixtures/*
+tests/fixtures/**/*
+tests/test_*.py
+
+# The bundled GitHub Action wrapper mentions the surfaces it scans.
+action/*

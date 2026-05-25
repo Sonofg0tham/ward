@@ -286,6 +286,24 @@ ward scan-local --rule-pack ./security/ward-rules
 Each YAML file is a list of rules. Schema is documented in
 [`src/ward/rules/instruction_overrides.yaml`](src/ward/rules/instruction_overrides.yaml).
 
+## Ignoring whole paths with `.wardignore`
+
+Some directories - test fixtures, security research notes, rule packs
+themselves - are intentionally adversarial and should not be scanned for
+content. Drop a `.wardignore` at the repo root with fnmatch-style globs:
+
+```
+# .wardignore
+tests/fixtures/**/*    # adversarial by design
+security/research/*    # writeup of past attacks
+docs/threat-models/*
+```
+
+Filenames in ignored paths are STILL scanned (a malicious filename
+remains suspicious even inside an ignored directory). Only the content
+scan is suppressed. Ward's own repo uses this to exclude its own source
+tree from self-scanning.
+
 ## Suppressing rules in documentation
 
 Security-research docs (Ward's own README included) need to *talk about*

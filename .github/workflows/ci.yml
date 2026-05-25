@@ -59,6 +59,11 @@ jobs:
         run: pip install -e .
 
       - name: scan-local
+        # Self-scan is informational. A security tool that describes the
+        # attacks it catches will inevitably trigger its own rules; the
+        # ward-allow-file directive handles most of it, but `continue-on-error`
+        # keeps any remaining hit informational rather than gating.
+        continue-on-error: true
         run: ward scan-local --format sarif > ward-self.sarif
 
       - name: Upload SARIF
@@ -67,3 +72,6 @@ jobs:
         with:
           name: ward-self-sarif
           path: ward-self.sarif
+
+      - name: selftest (scripted scenarios, gating)
+        run: ward selftest
