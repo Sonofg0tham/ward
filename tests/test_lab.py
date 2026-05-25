@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from typer.testing import CliRunner
 
 from ward.cli import app
@@ -26,8 +24,7 @@ def test_run_default_lab_catches_all(rule_pack):
     report = run_default_lab(rule_pack)
     assert report.total == len(DEMOS)
     assert report.caught == report.total, (
-        "Every bundled demo scenario must be blocked by Ward; the lab "
-        "narrative depends on it."
+        "Every bundled demo scenario must be blocked by Ward; the lab narrative depends on it."
     )
 
 

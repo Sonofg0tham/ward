@@ -32,6 +32,10 @@ jobs:
           path: dist/
 
   publish-pypi:
+    # Only runs once you've set the repo variable PYPI_READY=true AND
+    # configured a trusted publisher at https://pypi.org for this repo.
+    # Until then this job is skipped so tag pushes don't fail the workflow.
+    if: vars.PYPI_READY == 'true'
     needs: build
     runs-on: ubuntu-latest
     environment:

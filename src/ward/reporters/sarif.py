@@ -34,7 +34,9 @@ def _rule_descriptor(finding: Finding) -> dict[str, object]:
         "name": finding.rule_id.replace(".", "_"),
         "shortDescription": {"text": finding.message[:120]},
         "fullDescription": {"text": finding.message},
-        "helpUri": finding.references[0] if finding.references else "https://github.com/sonofg0tham/ward",
+        "helpUri": finding.references[0]
+        if finding.references
+        else "https://github.com/sonofg0tham/ward",
         "help": {
             "text": finding.remediation or "Reject the metadata and review the source.",
         },
@@ -53,11 +55,7 @@ def _result(finding: Finding, *, target: str) -> dict[str, object]:
         "ruleId": finding.rule_id,
         "level": _SARIF_LEVEL[finding.severity],
         "message": {
-            "text": (
-                f"{finding.message}\n"
-                f"surface: {finding.surface}\n"
-                f"evidence: {finding.evidence}"
-            )
+            "text": (f"{finding.message}\nsurface: {finding.surface}\nevidence: {finding.evidence}")
         },
         "locations": [
             {

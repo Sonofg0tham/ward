@@ -77,7 +77,9 @@ def fetch_pr_metadata(owner: str, repo: str, number: int) -> PRMetadata:
         for c in commits
         if isinstance(c, dict) and "sha" in c and "commit" in c
     )
-    changed_paths = tuple(str(f["filename"]) for f in files if isinstance(f, dict) and "filename" in f)
+    changed_paths = tuple(
+        str(f["filename"]) for f in files if isinstance(f, dict) and "filename" in f
+    )
 
     return PRMetadata(
         owner=owner,

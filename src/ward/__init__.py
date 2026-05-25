@@ -21,15 +21,15 @@ from .core.rules import RulePack, load_rule_pack
 __version__ = "0.1.0"
 
 __all__ = [
-    "__version__",
-    "build_input",
-    "scan_inputs",
-    "load_rule_pack",
     "Finding",
+    "RulePack",
     "ScanInput",
     "ScanReport",
     "Severity",
     "Surface",
     "Verdict",
-    "RulePack",
+    "__version__",
+    "build_input",
+    "load_rule_pack",
+    "scan_inputs",
 ]

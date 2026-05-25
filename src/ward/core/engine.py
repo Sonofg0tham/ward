@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-
 from fnmatch import fnmatchcase
 
 from ..detectors import ALL_DETECTOR_CLASSES
