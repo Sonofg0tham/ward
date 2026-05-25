@@ -1,0 +1,44 @@
+# Dependabot configuration.
+#
+# Bumps pip + GitHub Actions dependencies weekly, opens a PR per ecosystem,
+# rebases automatically. Security advisories trigger updates regardless of
+# the schedule. Keeps the supply chain fresh without flooding the PR queue.
+
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      python-dev-deps:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+      python-runtime-deps:
+        dependency-type: "production"
+        update-types: ["patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/action"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "action"
+      include: "scope"
