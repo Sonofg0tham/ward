@@ -24,11 +24,23 @@ _IDENTIFIER_SURFACES: frozenset[Surface] = frozenset(
     {"branch_name", "tag_name", "file_name", "directory_name", "commit_author"}
 )
 
-# Surfaces where ``ward-allow-file:`` directives are honoured. The directive
-# is meant for prose contexts (Ward's own README, security-research docs);
-# allowing it in commit messages or branch names would let an attacker
-# disable detection from inside the very text we're trying to screen.
-_SUPPRESSION_SURFACES: frozenset[Surface] = frozenset({"file_content", "code_comment"})
+# Surfaces where ``ward-allow-file:`` directives are honoured.
+#
+# Only ``file_content``. Source-file top-of-file comments are deliberately
+# excluded because they are an attacker-controlled surface in any threat
+# model where a PR can introduce new files: a malicious PR could add a
+# ``.py`` whose first line is ``# ward-allow-file: *`` and silence every
+# rule against that file. Restricting suppression to ``file_content`` means
+# the directive must live in a documentation file (.md / .rst / .txt /
+# .adoc per scan-local's DOC_SUFFIXES), where a PR-introduced change is
+# visible to a human reviewer.
+#
+# This is still not a full provenance check; an attacker who can modify
+# an existing doc file (eg README.md) in a PR can suppress detection on
+# that file. The mitigation is operational: review .md changes carefully,
+# and prefer a single repo-root ``.wardignore`` for path-scoped
+# suppression that does not flow through scan content at all.
+_SUPPRESSION_SURFACES: frozenset[Surface] = frozenset({"file_content"})
 
 
 def build_input(surface: Surface, text: str, *, location: str = "") -> ScanInput:
