@@ -11,6 +11,12 @@ ingests before any LLM-based reviewer, SAST agent, or IaC scanner sees
 it. The job: catch prompt injection attempts embedded in the places that
 traditional security tools ignore.
 
+**Latest benchmark (v0.1.2):** 75.2% in-scope recall, 0% false-positive
+rate on bundled samples from four public corpora (Lakera, deepset,
+Spikee, AdvBench). Full numbers in
+[`benchmark/v0.1.2.md`](benchmark/v0.1.2.md). Run `ward bench` to score
+your own rule pack.
+
 ## Why this exists
 
 Throughout early 2026, AI code-review agents were attacked through
@@ -153,6 +159,30 @@ Exit codes:
 - `0` PASS, no findings above the threshold.
 - `1` WARN, findings exist but none reached the fail-on severity.
 - `2` FAIL, at least one finding at or above fail-on.
+
+## Benchmark against public corpora
+
+`ward bench` scores Ward against four bundled public adversarial corpora
+(Lakera ignore-instructions, deepset prompt-injections, Spikee
+jailbreaks, AdvBench harmful-behaviors). Samples are shipped inside the
+wheel under each upstream's MIT or Apache 2.0 licence.
+
+```bash
+ward bench
+# Wrote benchmark report: ward-bench-report.md
+# In-scope recall: 75.2%  FPR: 0.0%
+```
+
+Output is Markdown by default with `--format json` for CI ingestion.
+Flags: `--corpus <name>` (repeatable), `--output <path>`, `--no-write`,
+`--list`.
+
+The bundled benchmark history lives under [`benchmark/`](benchmark/).
+Each release commits its own report so the detection envelope is
+auditable across versions. AdvBench is included as a *ceiling test*:
+the corpus contains bare harmful-intent strings with no injection
+phrasing, so Ward will score 0% there by design - that's the honest
+framing, not a regression.
 
 ## Run the adversarial lab
 
