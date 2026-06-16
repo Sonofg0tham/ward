@@ -83,6 +83,82 @@ _LEET_TABLE = str.maketrans(
     }
 )
 
+# Confusable-script-to-Latin fold table.
+#
+# Maps the most common Cyrillic and Greek codepoints that visually
+# impersonate Latin letters to their Latin look-alike. Based on Unicode
+# TR39's confusables data, restricted to the high-value subset that
+# actually appears in injection attempts (researchers and Lakera's
+# public corpus both lean on the same dozen characters). Hebrew and
+# Armenian are intentionally NOT in the table - their Latin overlap is
+# narrower and the false-positive cost of including them is higher.
+#
+# A token written entirely in confusables ("іgnοrе" - Cyrillic i + Greek
+# o, no Latin) folds to "ignore" and matches the standard rule, which is
+# the all-confusable bypass the mixed-script detector misses.
+_CONFUSABLE_FOLD = str.maketrans(
+    {
+        # Cyrillic lowercase
+        "а": "a",  # U+0430
+        "е": "e",  # U+0435
+        "о": "o",  # U+043E
+        "р": "p",  # U+0440
+        "с": "c",  # U+0441
+        "у": "y",  # U+0443
+        "х": "x",  # U+0445
+        "і": "i",  # U+0456
+        "ј": "j",  # U+0458
+        "ѕ": "s",  # U+0455
+        "ԁ": "d",  # U+0501
+        "ɡ": "g",  # U+0261 LATIN SMALL LETTER SCRIPT G
+        "ⅼ": "l",  # U+217C SMALL ROMAN NUMERAL FIFTY (looks like Latin l)
+        # Cyrillic uppercase
+        "А": "A",
+        "Е": "E",
+        "О": "O",
+        "Р": "P",
+        "С": "C",
+        "У": "Y",
+        "Х": "X",
+        "І": "I",
+        "Ј": "J",
+        # Greek lowercase
+        "α": "a",  # U+03B1
+        "ε": "e",  # U+03B5
+        "ι": "i",  # U+03B9
+        "ν": "v",  # U+03BD (Greek nu, looks like Latin v)
+        "ο": "o",  # U+03BF
+        "ρ": "p",  # U+03C1
+        "τ": "t",  # U+03C4
+        "υ": "u",  # U+03C5
+        # Greek uppercase
+        "Α": "A",
+        "Β": "B",
+        "Ε": "E",
+        "Η": "H",
+        "Ι": "I",
+        "Κ": "K",
+        "Μ": "M",
+        "Ν": "N",
+        "Ο": "O",
+        "Ρ": "P",
+        "Τ": "T",
+        "Υ": "Y",
+        "Χ": "X",
+        "Ζ": "Z",
+    }
+)
+
+
+def confusable_fold(text: str) -> str:
+    """Fold confusable Cyrillic / Greek characters to their Latin look-alikes.
+
+    Used as an alternative form for detector matching. "іgnοrе" (Cyrillic
+    'і' + Greek 'ο') becomes "ignore" and lights up the standard rule.
+    """
+    return text.translate(_CONFUSABLE_FOLD)
+
+
 # Detects single tokens of the shape "i.g.n.o.r.e" or "i-g-n-o-r-e" where
 # letters are separated by a consistent non-space separator. We handle the
 # intra-word-separator case (the realistic evasion form) but deliberately
@@ -222,10 +298,16 @@ def evasion_forms(text: str) -> list[str]:
     _add(decompose_spaced_runs(text))
     _add(collapse_repeats(text, max_run=1))
     _add(collapse_repeats(text, max_run=2))
+    # Confusable fold catches all-confusable tokens ("іgnοrе" -> "ignore")
+    # that the mixed-script detector misses because it requires Latin AND
+    # confusable in the same token.
+    _add(confusable_fold(text))
     # Combined transform: deleet -> decompose -> collapse-to-1. Catches
     # "1.g.n.0.r.3 4lllll pr3v10us" style stacked evasion.
     _add(collapse_repeats(decompose_spaced_runs(deleet(text)), max_run=1))
     _add(collapse_repeats(decompose_spaced_runs(deleet(text)), max_run=2))
+    # Confusable + deleet, in case "1gn0r3" with Cyrillic 'і' arrives.
+    _add(confusable_fold(deleet(text)))
     return forms
 
 
