@@ -379,6 +379,88 @@ def version() -> None:
     typer.echo(__version__)
 
 
+@app.command("bench")
+def bench(
+    corpus: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--corpus",
+            "-c",
+            help="Restrict to specific corpora by name. Repeatable. Default: run all bundled corpora.",
+        ),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Where to write the report. Defaults to 'ward-bench-report.md' (or .json with --format json).",
+        ),
+    ] = None,
+    fmt: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Output format: md | json", case_sensitive=False),
+    ] = "md",
+    no_write: Annotated[
+        bool,
+        typer.Option("--no-write", help="Print the report to stdout instead of writing a file."),
+    ] = False,
+    list_only: Annotated[
+        bool,
+        typer.Option("--list", help="List available corpora without running."),
+    ] = False,
+    fail_on: FailOnOption = "high",
+    rule_pack: RulePackOption = None,
+) -> None:
+    """Run Ward against bundled public adversarial corpora.
+
+    Produces a Markdown (or JSON) report with per-corpus recall, false-
+    positive rate, and which rule categories fired. Samples ship inside the
+    wheel under MIT / Apache 2.0 licences from each upstream.
+    """
+    from .bench import CORPORA, render_json, render_markdown, run_benchmark
+
+    if list_only:
+        for c in CORPORA:
+            typer.echo(f"{c.name:<32}  {c.fit.value:<14} {c.description}")
+        return
+
+    selected = list(CORPORA)
+    if corpus:
+        names = {c.name for c in CORPORA}
+        unknown = [n for n in corpus if n not in names]
+        if unknown:
+            typer.echo(f"Unknown corpus / corpora: {unknown}", err=True)
+            typer.echo("Run 'ward bench --list' to see available corpora.", err=True)
+            raise typer.Exit(code=2)
+        selected = [c for c in CORPORA if c.name in set(corpus)]
+
+    pack = load_rule_pack(rule_pack)
+    sev_fail = _parse_severity(fail_on, flag="--fail-on")
+    report = run_benchmark(selected, rule_pack=pack, fail_on=sev_fail)
+
+    fmt_lower = fmt.lower()
+    if fmt_lower == "md":
+        body = render_markdown(report)
+        default_name = "ward-bench-report.md"
+    elif fmt_lower == "json":
+        body = render_json(report)
+        default_name = "ward-bench-report.json"
+    else:
+        raise typer.BadParameter(f"--format must be md|json (got {fmt!r})")
+
+    if no_write:
+        typer.echo(body)
+    else:
+        target = output or Path(default_name)
+        target.write_text(body, encoding="utf-8")
+        typer.echo(f"Wrote benchmark report: {target}")
+        typer.echo(
+            f"In-scope recall: {report.overall_recall * 100:.1f}%  "
+            f"FPR: {report.overall_false_positive_rate * 100:.1f}%"
+        )
+
+
 @app.command("attack-demo")
 def attack_demo(
     scenario: Annotated[
