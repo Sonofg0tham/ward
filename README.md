@@ -335,18 +335,27 @@ the top of any documentation file:
 ```
 
 The directive accepts rule ids or fnmatch-style globs, comma-separated.
-It is only honoured on `file_content` and `code_comment` surfaces, never
-on branch names, commit messages, PR titles, or PR bodies. That's the
-intentional asymmetry: attackers cannot suppress detection from inside
-the text Ward is trying to screen.
+It is only honoured on the `file_content` surface (documentation files
+read whole by `scan-local`), never on `code_comment`, branch names,
+commit messages, PR titles, or PR bodies. That asymmetry is deliberate:
+an attacker who can land a PR cannot ship a new source file whose top
+comment silences detection.
 
-Supported comment styles for the directive:
+**Important threat-model note:** the directive provides no protection
+against an attacker who can modify an existing documentation file in
+a PR. That kind of change is visible in PR review, but Ward will not
+flag the modification automatically. For path-scoped suppression that
+does not flow through scan content at all, use `.wardignore` at the
+repo root. A provenance-aware mode (where the directive is only
+honoured from files unchanged since the merge base) is on the v0.2
+roadmap.
+
+Supported comment styles for the directive (file_content surface only):
 
 ```html
 <!-- ward-allow-file: io.* -->     <!-- HTML / Markdown -->
-# ward-allow-file: io.*            # Python / Bash / YAML
-// ward-allow-file: io.*           // JS / TS / Go / Rust / Java
-/* ward-allow-file: io.* */        /* C / CSS */
+# ward-allow-file: io.*            # ReST / .txt / .adoc
+/* ward-allow-file: io.* */        /* if you wrap docs in C comments */
 ```
 
 ## Evasion resistance
