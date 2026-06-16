@@ -28,15 +28,55 @@ Snyk's "Clinejection" issue-title attack against Cline.
 
 ### What Ward does not catch
 
-- Novel zero-day injection techniques that do not match any rule. Ward is a
-  rule-based scanner, not a generative classifier.
-- Attacks embedded in non-text formats (images, PDFs, audio).
+#### Out of scope by design
+
 - Attacks on the LLM itself once context has been built. That is a prompt
-  firewall's job (Lakera, LlamaFirewall). Ward sits earlier in the pipeline.
+  firewall's job (Lakera, LlamaFirewall, NVIDIA NeMo Guardrails, Microsoft
+  Prompt Shields). Ward sits earlier in the pipeline.
 - Vulnerabilities in the code being reviewed. That is SAST's job. Ward does
   not compete with SAST.
-- Agent-configuration tampering. That is BoltClaw's job. Ward protects agent
-  input, BoltClaw protects agent configuration.
+- Agent-configuration tampering. That is BoltClaw's and AgentShield's job.
+  Ward protects agent input, those tools protect agent configuration.
+
+#### Known limitations of the current rule pack (regex-shaped)
+
+Ward is regex-driven. That ceiling is real and is documented here so you
+do not adopt Ward expecting protection it cannot give:
+
+- **GCG / adversarial-suffix attacks** (Zou et al). Gibberish optimised
+  suffixes with no natural-language shape. Regex misses entirely. A
+  classifier-backed second tier is on the v0.2 roadmap.
+- **AutoDAN / PAIR optimised paraphrases.** Semantic, no canonical phrase
+  for a regex to anchor on.
+- **Crescendo / multi-turn gradual jailbreaks.** Ward is stateless per
+  surface. Payloads spread across multiple PR comments evade detection
+  unless an aggregating layer is added.
+- **Payload splitting** (Kang et al). Half the instruction in the PR
+  title, half in the body. Each half is benign on its own.
+- **Skeleton key / policy-puppetry attacks.** Semantic. Regex misses.
+- **Single-space character spacing** ("i g n o r e p r e v i o u s"). The
+  all-space variant is ambiguous because word boundaries cannot be
+  recovered from spaced singletons. Intra-word separators (`i.g.n.o.r.e`,
+  `i-g-n-o-r-e`) ARE handled.
+- **ASCII art payloads** and **Caesar / ROT ciphers.** Documented bypass
+  channels from arXiv:2308.06463. Not in the current normaliser.
+- **Unicode TAG block** (U+E0000 to U+E007F). Invisible to humans,
+  readable by tokenisers. Documented evasion path. Not yet detected.
+- **Multimodal payloads.** Text embedded in images (PNG/JPG). Ward is
+  text-only.
+- **Indirect injection through retrieved content** (RAG vector stores,
+  external web pages, runtime memory). Ward only scans repo-resident text
+  and GitHub event metadata.
+
+#### Operational caveats
+
+- The `ward-allow-file` directive provides no protection against an
+  attacker who can modify an existing documentation file in a PR. That
+  change is visible in PR review but Ward does not flag the modification
+  itself. A provenance-aware mode is on the v0.2 roadmap.
+- Ward is a rule-based scanner, not a generative classifier. Novel
+  zero-day injection techniques that do not match any rule pass through
+  silently until the rule pack is updated.
 
 Ward is one defensive layer. It is not a complete solution. Defence in depth
 still applies.
