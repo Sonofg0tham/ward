@@ -13,10 +13,30 @@ traditional security tools ignore.
 
 ## Why this exists
 
-In March 2026, AI bots compromised five major GitHub projects. The attack
-class was the same in each: agents being hijacked through inputs that
-traditional scanners treat as inert metadata. Branch names. File names.
-Commit messages. PR titles.
+Throughout early 2026, AI code-review agents were attacked through
+metadata that traditional security tools treat as inert. The
+attack class is documented in:
+
+- The **ambient-code / CLAUDE.md prompt-injection** disclosure
+  (Feb 2026), in which an attacker replaced `CLAUDE.md` to direct
+  the reviewer agent to vandalise the repo and post a fake
+  approval. Caught by Claude.
+- The **Claude Code GitHub Action CVE** (disclosed June 2026,
+  fixed in Claude Code 2.1.128), where a crafted issue body
+  recovered the agent into executing commands that leaked
+  environment variables.
+- Snyk's **"Clinejection"** writeup, where a single GitHub issue
+  title containing a prompt-injection payload triggered an AI
+  reviewer (Cline) to publish malicious npm packages.
+- The **"hackerbot-claw" GitHub Actions supply chain attacks**
+  (Feb 2026), which compromised Microsoft's `ai-discovery-agent`
+  via branch-name injection and DataDog's `iac-scanner` via
+  filename injection. Those were bash-into-workflow attacks
+  rather than prompt injection, but they prove the metadata-as-
+  attack-surface trend.
+
+The pattern across all of them: payloads land in places that
+SAST, secret scanners, and prompt firewalls don't look.
 
 The existing security stack does not help here:
 
@@ -356,8 +376,7 @@ out of scope for v0.1.
 ## Threat model
 
 Ward is a pattern-matching tool. It catches the attack class documented
-in OWASP ASI Top 10 (ASI01) and in the March 2026 GitHub supply-chain
-incidents.
+in OWASP ASI Top 10 (ASI01) and in the early-2026 incidents above.
 
 It does **not** catch:
 

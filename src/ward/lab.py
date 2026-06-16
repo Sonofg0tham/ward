@@ -229,8 +229,10 @@ def render_markdown(report: LabReport) -> str:
     if report.caught == report.total:
         out.append(
             "Ward blocked every scripted attack scenario before the reviewer "
-            "agent's context window was populated. Each attack is drawn from "
-            "OWASP ASI Top 10 or the March 2026 GitHub supply-chain incidents."
+            "agent's context window was populated. Each attack mirrors a "
+            "documented 2026 AI-reviewer incident (ambient-code CLAUDE.md, "
+            "Claude Code GitHub Action CVE, Snyk's Clinejection) or the "
+            "OWASP ASI Top 10 ASI01 pattern."
         )
     else:
         missed = report.total - report.caught
