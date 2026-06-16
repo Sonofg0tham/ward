@@ -43,9 +43,7 @@ DEMOS: tuple[DemoScenario, ...] = (
         inputs=(
             DemoInput("branch_name", "docs/update-claude-md"),
             DemoInput("pr_title", "Update CLAUDE.md with new repo conventions"),
-            DemoInput(
-                "file_name", "CLAUDE.md"
-            ),
+            DemoInput("file_name", "CLAUDE.md"),
             DemoInput(
                 "file_content",
                 "# Repository conventions\n\n"
