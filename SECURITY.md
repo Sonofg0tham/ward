@@ -7,8 +7,10 @@
 Ward is a pattern-matching tool that screens the metadata an AI agent ingests
 before that content reaches an LLM-based code reviewer, SAST agent, or IaC
 scanner. It catches the attack class documented in OWASP ASI Top 10 (ASI01,
-goal hijack via untrusted input) and in the March 2026 GitHub supply-chain
-incidents.
+goal hijack via untrusted input) and demonstrated in real 2026 incidents:
+the ambient-code / CLAUDE.md prompt-injection compromise (Feb 2026), the
+Claude Code GitHub Action CVE (disclosed Jun 2026, fixed in 2.1.128), and
+Snyk's "Clinejection" issue-title attack against Cline.
 
 ### What Ward catches
 

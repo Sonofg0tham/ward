@@ -498,8 +498,8 @@ def selftest(
     """Run Ward's built-in adversarial scenarios and report detection coverage.
 
     This is the one-command credibility check. Each scenario is a known
-    attack pattern from OWASP ASI Top 10 or the March 2026 incidents. Ward
-    scans them all and reports whether the expected rule fired.
+    attack pattern from OWASP ASI Top 10 or the documented 2026 AI-reviewer
+    incidents. Ward scans them all and reports whether the expected rule fired.
     """
     from .selftest import CATEGORIES, SCENARIOS  # local import to keep startup snappy
 

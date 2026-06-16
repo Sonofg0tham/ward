@@ -1,8 +1,11 @@
 # Multilingual instruction overrides.
 #
-# The March 2026 Trivy compromise used a Russian-language override embedded
-# in a commit message. Restricting Ward to English-only patterns would have
-# missed it. Each rule below is named with its ISO 639-1 code so finding
+# Non-English instruction overrides are a documented evasion class for
+# English-trained prompt filters. Trendyol's PromptGuard 2 bypass research
+# (2025) and Lakera's Aug 2025 non-English evasion writeup both showed that
+# the same canonical "ignore previous instructions" payload translated into
+# Russian, Chinese or Arabic regularly bypasses filters that catch the
+# English form. Each rule below is named with its ISO 639-1 code so finding
 # reports identify the language for the human reviewer.
 #
 # Sources for the canonical phrasings:
@@ -10,6 +13,7 @@
 #   - garak probe set
 #   - PromptInjection-Bench v2
 #   - OWASP ASI working group examples
+#   - Trendyol's PromptGuard 2 bypass research
 
 - id: io.ru_ignore_previous
   category: instruction_override
@@ -19,7 +23,7 @@
     - '(?i)игнорир(?:уй|уйте|овать)\s+(?:все\s+|любые\s+)?предыдущ(?:ие|их)\s+(?:инструкции|указания|сообщения|правила)'
     - '(?i)заб(?:удь|удьте|ыть)\s+(?:все|всё|про\s+все)'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
-  remediation: "Reject. Russian instruction override matching the pattern used in the March 2026 Trivy compromise."
+  remediation: "Reject. Russian instruction override is a documented evasion class for English-trained prompt filters (see Lakera and Trendyol non-English bypass research)."
 
 - id: io.es_ignore_previous
   category: instruction_override
