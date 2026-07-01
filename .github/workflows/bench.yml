@@ -1,0 +1,70 @@
+name: Bench
+
+on:
+  pull_request:
+
+# Comment on the PR with the detection-rate diff vs the base branch.
+# Makes silent regressions on Ward's benchmark numbers impossible to merge
+# without a human noticing.
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  bench-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR HEAD
+        uses: actions/checkout@v4
+        with:
+          path: pr
+
+      - name: Check out base ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: base
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Bench the base branch
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ./base
+          ward bench --format json --output "${{ runner.temp }}/base.json"
+          python -m pip uninstall -y ward-scanner
+
+      - name: Bench the PR branch
+        run: |
+          python -m pip install ./pr
+          ward bench --format json --output "${{ runner.temp }}/pr.json"
+
+      - name: Compute diff
+        run: |
+          ward bench-diff \
+            "${{ runner.temp }}/base.json" \
+            "${{ runner.temp }}/pr.json" \
+            --output "${{ runner.temp }}/diff.md"
+          cat "${{ runner.temp }}/diff.md"
+
+      - name: Post / update sticky PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        # Skip on forks: they do not have write permission to comment on the PR.
+        if: ${{ github.event.pull_request.head.repo.fork == false }}
+        with:
+          header: ward-bench-diff
+          path: ${{ runner.temp }}/diff.md
+
+      - name: Upload bench artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-diff
+          path: |
+            ${{ runner.temp }}/base.json
+            ${{ runner.temp }}/pr.json
+            ${{ runner.temp }}/diff.md

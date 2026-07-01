@@ -9,6 +9,7 @@ from ..detectors import ALL_DETECTOR_CLASSES
 from .models import Finding, ScanInput, ScanReport, Severity, Surface
 from .normalise import (
     decode_candidates,
+    decode_unicode_tags,
     evasion_forms,
     extract_suppressions,
     normalise_text,
@@ -53,6 +54,12 @@ def build_input(surface: Surface, text: str, *, location: str = "") -> ScanInput
         identifier_form = split_identifier(normalised)
         if identifier_form != normalised:
             decoded.append(identifier_form)
+    # Unicode TAG-block decode runs on the RAW text (normalise strips those
+    # chars). Any TAG-smuggled instruction reappears as visible ASCII so the
+    # standard rules match against it.
+    tag_decoded = decode_unicode_tags(text)
+    if tag_decoded != text and tag_decoded != normalised:
+        decoded.append(tag_decoded)
     # Evasion-resistant forms: leetspeak, character-spacing, repeat-letter.
     # Run rules against the normalised text in each form so we catch
     # "1gn0r3 pr3v10us", "i g n o r e", and "ignooooore".

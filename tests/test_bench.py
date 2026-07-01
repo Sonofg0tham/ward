@@ -96,3 +96,64 @@ def test_cli_bench_json_format():
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert "summary" in payload
+
+
+def _sample_report(recall: float, fpr: float, per_corpus: dict[str, float]) -> dict:
+    return {
+        "version": "0.1.x",
+        "summary": {
+            "overall_recall_in_scope": recall,
+            "overall_false_positive_rate_in_scope": fpr,
+        },
+        "corpora": [
+            {"name": name, "recall": rec, "fit": "in_scope"} for name, rec in per_corpus.items()
+        ],
+    }
+
+
+def test_render_diff_flags_improvement():
+    from ward.bench.compare import render_diff
+
+    base = _sample_report(0.60, 0.0, {"lakera": 0.32})
+    new = _sample_report(0.75, 0.0, {"lakera": 0.68})
+    body = render_diff(base, new)
+    assert "In-scope recall" in body
+    assert "+15.0pp" in body or "+15.1pp" in body
+    assert "✅" in body
+
+
+def test_render_diff_flags_regression():
+    from ward.bench.compare import render_diff
+
+    base = _sample_report(0.80, 0.02, {"lakera": 0.70})
+    new = _sample_report(0.60, 0.02, {"lakera": 0.40})
+    body = render_diff(base, new)
+    assert "Recall regression" in body
+    assert "⚠️" in body
+
+
+def test_render_diff_flags_fpr_regression():
+    from ward.bench.compare import render_diff
+
+    base = _sample_report(0.70, 0.0, {"lakera": 0.68})
+    new = _sample_report(0.70, 0.15, {"lakera": 0.68})
+    body = render_diff(base, new)
+    assert "False-positive regression" in body
+
+
+def test_render_diff_no_change():
+    from ward.bench.compare import render_diff
+
+    r = _sample_report(0.75, 0.0, {"lakera": 0.68})
+    body = render_diff(r, r)
+    assert "No change to headline" in body
+
+
+def test_cli_bench_diff_command(tmp_path):
+    base_path = tmp_path / "base.json"
+    new_path = tmp_path / "new.json"
+    base_path.write_text(json.dumps(_sample_report(0.60, 0.0, {"lakera": 0.32})), encoding="utf-8")
+    new_path.write_text(json.dumps(_sample_report(0.75, 0.0, {"lakera": 0.68})), encoding="utf-8")
+    result = runner.invoke(app, ["bench-diff", str(base_path), str(new_path)])
+    assert result.exit_code == 0
+    assert "Ward bench diff" in result.stdout

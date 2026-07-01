@@ -461,6 +461,31 @@ def bench(
         )
 
 
+@app.command("bench-diff")
+def bench_diff(
+    base: Annotated[Path, typer.Argument(help="Path to the base benchmark JSON.")],
+    new: Annotated[Path, typer.Argument(help="Path to the PR / candidate benchmark JSON.")],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Where to write the diff. Defaults to stdout."),
+    ] = None,
+) -> None:
+    """Render the delta between two ``ward bench --format json`` reports.
+
+    Designed for CI: run bench on the PR HEAD and on the base branch, then
+    compare with this command to get a Markdown block suitable for a sticky
+    PR comment.
+    """
+    from .bench.compare import render_diff_from_paths
+
+    body = render_diff_from_paths(base, new)
+    if output is None:
+        typer.echo(body)
+    else:
+        output.write_text(body, encoding="utf-8")
+        typer.echo(f"Wrote diff: {output}")
+
+
 @app.command("attack-demo")
 def attack_demo(
     scenario: Annotated[
