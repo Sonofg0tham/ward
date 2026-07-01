@@ -7,6 +7,7 @@ import re
 import unicodedata
 
 from ..core.models import Finding, ScanInput, Severity
+from ..core.normalise import contains_unicode_tag
 from .base import RuleBasedDetector, truncate_evidence
 
 _BASE64_BLOCK = re.compile(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{80,}={0,2}(?![A-Za-z0-9+/=])")
@@ -164,6 +165,30 @@ class ObfuscationDetector(RuleBasedDetector):
                     location=source.location,
                     evidence=f"U+{ord(ch):04X} at offset {idx}",
                     remediation="Strip the character. Treat the source as suspicious until reviewed by a human.",
+                )
+            )
+
+        tag_hits = contains_unicode_tag(raw)
+        if tag_hits:
+            idx, cp_label = tag_hits[0]
+            results.append(
+                Finding(
+                    rule_id="obf.unicode_tag",
+                    detector=self.name,
+                    category=self.category,
+                    severity=Severity.HIGH,
+                    message=(
+                        f"Unicode TAG-block characters ({len(tag_hits)} total) found in "
+                        f"{source.surface}. TAG chars are invisible to humans but readable "
+                        "by LLM tokenisers - a documented smuggling channel."
+                    ),
+                    surface=source.surface,
+                    location=source.location,
+                    evidence=f"{cp_label} at offset {idx} (+{len(tag_hits) - 1} more)",
+                    remediation="Strip the TAG-block range (U+E0000-U+E007F) before feeding text to any agent.",
+                    references=(
+                        "https://embracethered.com/blog/posts/2024/hiding-and-finding-text-with-unicode-tags/",
+                    ),
                 )
             )
 
