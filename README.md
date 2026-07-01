@@ -11,11 +11,18 @@ ingests before any LLM-based reviewer, SAST agent, or IaC scanner sees
 it. The job: catch prompt injection attempts embedded in the places that
 traditional security tools ignore.
 
-**Latest benchmark (v0.1.2):** 75.2% in-scope recall, 0% false-positive
-rate on bundled samples from four public corpora (Lakera, deepset,
-Spikee, AdvBench). Full numbers in
-[`benchmark/v0.1.2.md`](benchmark/v0.1.2.md). Run `ward bench` to score
-your own rule pack.
+**Latest benchmark (v0.1.3):**
+
+- **Smoke** (bundled 50-row samples, offline): 75.2% in-scope recall,
+  0.0% false-positive rate.
+- **Full corpus** (`ward bench --download`, 1,391 real rows): **53.5%
+  in-scope recall, 0.0% false-positive rate** across Lakera, deepset,
+  and Spikee. AdvBench is a deliberate ceiling test at 0%.
+
+The 0.0% FPR on 271 benign deepset rows is the strongest signal here.
+Full reports in [`benchmark/v0.1.3-smoke.md`](benchmark/v0.1.3-smoke.md)
+and [`benchmark/v0.1.3-full.md`](benchmark/v0.1.3-full.md). Every PR gets
+its own bench-diff comment via the CI workflow.
 
 ## Why this exists
 
@@ -231,7 +238,7 @@ useful as a CI gate).
 Add it to a workflow in three lines:
 
 ```yaml
-- uses: sonofg0tham/ward/action@v1
+- uses: sonofg0tham/ward@v0.1.3
   with:
     fail-on: high
 ```
@@ -249,7 +256,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: sonofg0tham/ward/action@v1
+      - uses: sonofg0tham/ward@v0.1.3
         with:
           fail-on: high
           format: sarif
