@@ -409,6 +409,16 @@ def bench(
         bool,
         typer.Option("--list", help="List available corpora without running."),
     ] = False,
+    download_corpora: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--download",
+            help=(
+                "Fetch the full upstream corpus into the local cache before benching. "
+                "Repeatable. Requires the [bench-download] extra for parquet corpora."
+            ),
+        ),
+    ] = None,
     fail_on: FailOnOption = "high",
     rule_pack: RulePackOption = None,
 ) -> None:
@@ -424,6 +434,18 @@ def bench(
         for c in CORPORA:
             typer.echo(f"{c.name:<32}  {c.fit.value:<14} {c.description}")
         return
+
+    if download_corpora:
+        from .bench.download import download
+
+        for name in download_corpora:
+            typer.echo(f"downloading {name}...")
+            try:
+                path = download(name, force=True)
+            except Exception as exc:
+                typer.echo(f"  ERROR: {exc}", err=True)
+                raise typer.Exit(code=2) from exc
+            typer.echo(f"  cached: {path}")
 
     selected = list(CORPORA)
     if corpus:

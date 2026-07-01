@@ -40,24 +40,44 @@ class Corpus:
     surface: str = "pr_body"
 
 
-def _iter_jsonl(resource_name: str) -> Iterable[dict[str, object]]:
+def _iter_jsonl_path(path: object) -> Iterable[dict[str, object]]:
+    """Yield each JSON object from a JSONL file-like path."""
+    from pathlib import Path
+
+    real = Path(str(path))
+    for line in real.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        yield json.loads(line)
+
+
+def _iter_jsonl_resource(resource_name: str) -> Iterable[dict[str, object]]:
     """Yield each JSON object from a bundled samples JSONL resource."""
     pkg = resources.files("ward.bench.samples")
     with resources.as_file(pkg / resource_name) as path:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            yield json.loads(line)
+        yield from _iter_jsonl_path(path)
 
 
-def load_rows(corpus: Corpus) -> list[tuple[str, bool]]:
+def load_rows(corpus: Corpus, *, use_cache: bool = True) -> list[tuple[str, bool]]:
     """Return ``(text, expect_detect)`` pairs for a corpus.
 
-    Bundled samples only at v0.1.x. Download-mode is on the v0.2 roadmap.
+    Uses a locally-cached full-corpus file (via ``ward bench --download``)
+    when present and ``use_cache`` is true, else falls back to the bundled
+    smoke sample.
     """
+    source: Iterable[dict[str, object]]
+    if use_cache:
+        from .download import cached_path, is_cached
+
+        if is_cached(corpus.name):
+            source = _iter_jsonl_path(cached_path(corpus.name))
+        else:
+            source = _iter_jsonl_resource(corpus.sample_file)
+    else:
+        source = _iter_jsonl_resource(corpus.sample_file)
     rows: list[tuple[str, bool]] = []
-    for obj in _iter_jsonl(corpus.sample_file):
+    for obj in source:
         text = str(obj.get("text", "")).strip()
         if not text:
             continue
