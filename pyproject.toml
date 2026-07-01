@@ -113,3 +113,10 @@ ignore = ["E501", "UP042"]
 python_version = "3.11"
 strict = true
 files = ["src/ward"]
+
+# pyarrow is an optional runtime dep (only needed for `ward bench --download`
+# against parquet corpora). It's not in the [dev] extra so mypy on CI cannot
+# see it. Allow the missing import so both environments pass.
+[[tool.mypy.overrides]]
+module = "pyarrow.*"
+ignore_missing_imports = true
