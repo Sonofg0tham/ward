@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ward-scanner"
-version = "0.1.4"
+version = "0.2.0"
 description = "Pre-agent metadata scanner. Catches prompt injection in branch names, commits, PR titles, and other inputs before they reach an AI code reviewer."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -54,6 +54,12 @@ bench-download = [
   # Only needed for downloading the parquet-formatted upstream corpora
   # (Lakera, deepset). The CSV / JSONL corpora work without this extra.
   "pyarrow>=15.0",
+]
+judge = [
+  # Only needed for the optional LLM judge tier (`ward judge --engine anthropic`
+  # and `ward bench --judge anthropic`). Ward's core is regex-only and has no
+  # LLM dependency.
+  "anthropic>=0.40",
 ]
 
 [project.scripts]
@@ -119,4 +125,11 @@ files = ["src/ward"]
 # see it. Allow the missing import so both environments pass.
 [[tool.mypy.overrides]]
 module = "pyarrow.*"
+ignore_missing_imports = true
+
+# anthropic is an optional runtime dep (only the LLM judge tier needs it) and
+# is not in the [dev] extra, so mypy on CI cannot see it. Allow the missing
+# import so both environments pass.
+[[tool.mypy.overrides]]
+module = "anthropic.*"
 ignore_missing_imports = true

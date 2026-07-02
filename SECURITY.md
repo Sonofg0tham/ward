@@ -40,14 +40,17 @@ Snyk's "Clinejection" issue-title attack against Cline.
 
 #### Known limitations of the current rule pack (regex-shaped)
 
-Ward is regex-driven. That ceiling is real and is documented here so you
-do not adopt Ward expecting protection it cannot give:
+Ward's tier 1 is regex-driven. That ceiling is real and is documented here
+so you do not adopt Ward expecting protection it cannot give. The optional
+LLM judge tier (`ward judge` / `ward bench --judge`, see the README) is the
+intended answer for the semantic classes below - enable it where you need
+recall beyond what regex can reach:
 
 - **GCG / adversarial-suffix attacks** (Zou et al). Gibberish optimised
-  suffixes with no natural-language shape. Regex misses entirely. A
-  classifier-backed second tier is on the v0.2 roadmap.
+  suffixes with no natural-language shape. Regex misses entirely; the
+  judge tier is the intended mitigation.
 - **AutoDAN / PAIR optimised paraphrases.** Semantic, no canonical phrase
-  for a regex to anchor on.
+  for a regex to anchor on. Judge tier territory.
 - **Crescendo / multi-turn gradual jailbreaks.** Ward is stateless per
   surface. Payloads spread across multiple PR comments evade detection
   unless an aggregating layer is added.
@@ -76,9 +79,20 @@ do not adopt Ward expecting protection it cannot give:
   this in CI with `ward scan-local --suppression-base <base-ref>`,
   which only honours directives in files unchanged since the base ref.
   Directives in files the PR touched are ignored.
-- Ward is a rule-based scanner, not a generative classifier. Novel
-  zero-day injection techniques that do not match any rule pass through
-  silently until the rule pack is updated.
+- Ward's tier 1 is a rule-based scanner, not a generative classifier.
+  Novel zero-day injection techniques that do not match any rule pass
+  through the regex tier silently until the rule pack is updated. Enable
+  the LLM judge tier for a semantic second opinion.
+- **The LLM judge tier classifies attacker-controlled text, so the judge
+  itself can in principle be prompt-injected.** Ward mitigates this - the
+  untrusted text is fenced with a one-time hash-derived delimiter the
+  attacker cannot forge, every instruction lives in the trusted (cached)
+  system prompt, and the model is constrained to a structured verdict
+  rather than free text - but this is defence in depth, not a guarantee.
+  Treat a judge verdict as advisory signal, not an unforgeable oracle,
+  and keep the deterministic regex tier as your baseline. The judge is
+  off by default and makes outbound calls to your configured LLM provider
+  only when you enable it; Ward's core remains offline and zero-telemetry.
 
 Ward is one defensive layer. It is not a complete solution. Defence in depth
 still applies.

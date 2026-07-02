@@ -35,8 +35,18 @@ def render_markdown(report: BenchReport) -> str:
     lines.append("")
     lines.append("## Headline numbers")
     lines.append("")
-    lines.append(f"- In-scope recall: **{_pct(report.overall_recall)}**")
-    lines.append(f"- In-scope false-positive rate: **{_pct(report.overall_false_positive_rate)}**")
+    lines.append(f"- In-scope recall (regex): **{_pct(report.overall_recall)}**")
+    lines.append(
+        f"- In-scope false-positive rate (regex): **{_pct(report.overall_false_positive_rate)}**"
+    )
+    if report.judge_ran:
+        lines.append(
+            f"- In-scope recall (regex + judge): **{_pct(report.overall_combined_recall)}**"
+        )
+        lines.append(
+            f"- In-scope false-positive rate (regex + judge): "
+            f"**{_pct(report.overall_combined_false_positive_rate)}**"
+        )
     lines.append("")
     lines.append("## Per-corpus results")
     lines.append("")
@@ -55,6 +65,25 @@ def render_markdown(report: BenchReport) -> str:
         "a low recall here is the honest answer, not a regression"
     )
     lines.append("")
+    if report.judge_ran:
+        lines.append("## Judge tier (marginal lift over regex)")
+        lines.append("")
+        lines.append(
+            "The judge ran only on rows the regex tier did not already flag. "
+            "**Recovered** = injection rows regex missed that the judge caught. "
+            "**New FP** = benign rows regex passed that the judge wrongly flagged."
+        )
+        lines.append("")
+        lines.append("| Corpus | Recovered | New FP | Errors | Regex recall | + Judge recall |")
+        lines.append("|--------|-----------|--------|--------|--------------|----------------|")
+        for r in report.results:
+            lines.append(
+                f"| `{r.corpus.name}` | {r.judge_recovered_positive} | "
+                f"{r.judge_false_positive} | {r.judge_errors} | "
+                f"{_pct(r.recall)} | {_pct(r.combined_recall)} |"
+            )
+        lines.append("")
+
     lines.append("## Rules that fired (by category)")
     lines.append("")
     for r in report.results:
@@ -101,6 +130,11 @@ def render_json(report: BenchReport) -> str:
         "summary": {
             "overall_recall_in_scope": report.overall_recall,
             "overall_false_positive_rate_in_scope": report.overall_false_positive_rate,
+            "judge_ran": report.judge_ran,
+            "overall_combined_recall_in_scope": report.overall_combined_recall,
+            "overall_combined_false_positive_rate_in_scope": (
+                report.overall_combined_false_positive_rate
+            ),
         },
         "corpora": [
             {
@@ -118,6 +152,12 @@ def render_json(report: BenchReport) -> str:
                 "precision": r.precision,
                 "false_positive_rate": r.false_positive_rate,
                 "fired_categories": r.fired_categories,
+                "judge_ran": r.judge_ran,
+                "judge_recovered_positive": r.judge_recovered_positive,
+                "judge_false_positive": r.judge_false_positive,
+                "judge_errors": r.judge_errors,
+                "combined_recall": r.combined_recall,
+                "combined_false_positive_rate": r.combined_false_positive_rate,
             }
             for r in report.results
         ],

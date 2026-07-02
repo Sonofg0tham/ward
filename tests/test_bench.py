@@ -157,3 +157,75 @@ def test_cli_bench_diff_command(tmp_path):
     result = runner.invoke(app, ["bench-diff", str(base_path), str(new_path)])
     assert result.exit_code == 0
     assert "Ward bench diff" in result.stdout
+
+
+# --- judge tier integration -------------------------------------------------
+
+
+def test_bench_without_judge_leaves_judge_fields_default():
+    report = run_benchmark()
+    assert not report.judge_ran
+    for r in report.results:
+        assert r.judge_ran is False
+        assert r.judge_recovered_positive == 0
+
+
+def test_bench_with_mock_judge_shows_lift_and_no_new_fp():
+    from ward.judge import MockJudge
+
+    report = run_benchmark(judge=MockJudge())
+    assert report.judge_ran
+    # The mock recovers at least one semantic row regex misses...
+    assert sum(r.judge_recovered_positive for r in report.results) > 0
+    # ...and combined recall is at least the regex recall.
+    assert report.overall_combined_recall >= report.overall_recall
+    # ...without introducing benign false positives on the labelled corpus.
+    assert report.overall_combined_false_positive_rate <= report.overall_false_positive_rate + 1e-9
+
+
+def test_bench_report_markdown_has_judge_section_when_judge_ran():
+    from ward.judge import MockJudge
+
+    report = run_benchmark(judge=MockJudge())
+    md = render_markdown(report)
+    assert "Judge tier" in md
+    assert "regex + judge" in md
+
+
+def test_bench_report_json_carries_judge_fields():
+    from ward.judge import MockJudge
+
+    report = run_benchmark(judge=MockJudge())
+    payload = json.loads(render_json(report))
+    assert payload["summary"]["judge_ran"] is True
+    assert "overall_combined_recall_in_scope" in payload["summary"]
+    assert all("judge_recovered_positive" in c for c in payload["corpora"])
+
+
+def test_bench_judge_survives_erroring_judge():
+    """A judge that raises JudgeError on every row must not crash the run;
+    the errors are counted and reported."""
+    from ward.judge import Judge, JudgeError
+
+    class _BoomJudge(Judge):
+        name = "boom"
+
+        def classify(self, text: str):
+            raise JudgeError("always fails")
+
+    report = run_benchmark(judge=_BoomJudge())
+    assert report.judge_ran
+    assert sum(r.judge_errors for r in report.results) > 0
+    # No recoveries, no new FPs, recall unchanged.
+    assert report.overall_combined_recall == report.overall_recall
+
+
+def test_cli_bench_with_mock_judge():
+    result = runner.invoke(app, ["bench", "--no-write", "--judge", "mock"])
+    assert result.exit_code == 0
+    assert "regex + judge" in result.stdout
+
+
+def test_cli_bench_judge_unknown_engine_errors():
+    result = runner.invoke(app, ["bench", "--no-write", "--judge", "no-such"])
+    assert result.exit_code == 2

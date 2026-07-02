@@ -360,6 +360,80 @@ def scan_pr(
     raise typer.Exit(code=code)
 
 
+@app.command("judge")
+def judge_cmd(
+    engine: Annotated[
+        str,
+        typer.Option("--engine", "-e", help="Judge engine: mock | anthropic."),
+    ] = "anthropic",
+    model: Annotated[
+        str | None,
+        typer.Option("--model", help="Override the judge model (anthropic engine)."),
+    ] = None,
+    fmt: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Output: pretty | json.", case_sensitive=False),
+    ] = "pretty",
+    threshold: Annotated[
+        float,
+        typer.Option("--threshold", help="Min confidence to treat as an injection (exit 2)."),
+    ] = 0.5,
+) -> None:
+    """Classify a single string from stdin with the optional LLM judge tier.
+
+    This is the tier-2 semantic classifier: it catches injections that regex
+    structurally misses (paraphrases, role-play, novel phrasings). The
+    'anthropic' engine needs the [judge] extra and ANTHROPIC_API_KEY; 'mock'
+    is an offline keyword judge for demos and CI.
+    """
+    from .judge import JudgeError, get_judge
+
+    text = sys.stdin.read()
+    try:
+        judge = get_judge(engine, model=model)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    if not judge.available():
+        typer.echo(
+            f"Judge '{engine}' is not available. For 'anthropic', install the extra "
+            'and set an API key:\n    pip install "ward-scanner[judge]"\n'
+            "    export ANTHROPIC_API_KEY=sk-...",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    try:
+        verdict = judge.classify(text)
+    except JudgeError as exc:
+        typer.echo(f"Judge error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    if fmt.lower() == "json":
+        import json as _json
+
+        typer.echo(
+            _json.dumps(
+                {
+                    "is_injection": verdict.is_injection,
+                    "confidence": verdict.confidence,
+                    "technique": verdict.technique,
+                    "reasoning": verdict.reasoning,
+                    "engine": engine,
+                },
+                indent=2,
+            )
+        )
+    else:
+        console = Console()
+        colour = "red" if verdict.is_injection else "green"
+        label = "INJECTION" if verdict.is_injection else "BENIGN"
+        console.print(f"[{colour} bold]{label}[/{colour} bold]  ({verdict.confidence:.2f})")
+        console.print(f"technique: {verdict.technique}")
+        console.print(f"reasoning: {verdict.reasoning}")
+
+    raise typer.Exit(code=2 if (verdict.is_injection and verdict.confidence >= threshold) else 0)
+
+
 @app.command("explain")
 def explain(
     rule_id: Annotated[str, typer.Argument(help="The rule id, e.g. 'io.ignore_previous'.")],
@@ -454,6 +528,24 @@ def bench(
             ),
         ),
     ] = None,
+    judge_engine: Annotated[
+        str,
+        typer.Option(
+            "--judge",
+            help=(
+                "Optional LLM judge tier for rows regex misses: none | mock | anthropic. "
+                "Off by default. 'anthropic' needs the [judge] extra and ANTHROPIC_API_KEY."
+            ),
+        ),
+    ] = "none",
+    judge_model: Annotated[
+        str | None,
+        typer.Option("--judge-model", help="Override the judge model (anthropic engine)."),
+    ] = None,
+    judge_threshold: Annotated[
+        float,
+        typer.Option("--judge-threshold", help="Min judge confidence to count as a detection."),
+    ] = 0.5,
     fail_on: FailOnOption = "high",
     rule_pack: RulePackOption = None,
 ) -> None:
@@ -494,7 +586,31 @@ def bench(
 
     pack = load_rule_pack(rule_pack)
     sev_fail = _parse_severity(fail_on, flag="--fail-on")
-    report = run_benchmark(selected, rule_pack=pack, fail_on=sev_fail)
+
+    judge = None
+    if judge_engine != "none":
+        from .judge import get_judge
+
+        try:
+            judge = get_judge(judge_engine, model=judge_model)
+        except ValueError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        if not judge.available():
+            typer.echo(
+                f"Judge '{judge_engine}' is not available (missing [judge] extra or "
+                "ANTHROPIC_API_KEY). Running regex-only.",
+                err=True,
+            )
+            judge = None
+
+    report = run_benchmark(
+        selected,
+        rule_pack=pack,
+        fail_on=sev_fail,
+        judge=judge,
+        judge_threshold=judge_threshold,
+    )
 
     fmt_lower = fmt.lower()
     if fmt_lower == "md":
