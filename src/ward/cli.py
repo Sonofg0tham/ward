@@ -22,10 +22,12 @@ from .core.engine import build_input, scan_inputs
 from .core.git_metadata import (
     CODE_SUFFIXES,
     DOC_SUFFIXES,
+    changed_files,
     commit_message,
     current_branch,
     head_sha,
     recent_commits,
+    ref_exists,
     tag_names,
     walk_tracked_files,
 )
@@ -224,12 +226,38 @@ def scan_local(
     commit_limit: Annotated[
         int, typer.Option("--commits", help="How many recent commit messages to scan.")
     ] = 20,
+    suppression_base: Annotated[
+        str | None,
+        typer.Option(
+            "--suppression-base",
+            help=(
+                "Only honour ward-allow-file directives in files UNCHANGED since "
+                "this git ref (e.g. origin/main). Files touched by the current "
+                "branch or PR cannot suppress detection. Use in CI to close the "
+                "suppression-via-PR bypass."
+            ),
+        ),
+    ] = None,
     fmt: OutputFormat = "pretty",
     threshold: ThresholdOption = "low",
     fail_on: FailOnOption = "high",
     rule_pack: RulePackOption = None,
 ) -> None:
     """Scan the local git working tree: branch, recent commits, tags, doc files."""
+    changed: set[str] = set()
+    if suppression_base is not None:
+        if not ref_exists(repo, suppression_base):
+            typer.echo(f"--suppression-base ref not found: {suppression_base}", err=True)
+            raise typer.Exit(code=2)
+        changed = changed_files(repo, suppression_base)
+
+    def _trusts_suppressions(relname: str) -> bool:
+        # With no base ref, every file is trusted (scanning your own checkout).
+        # With a base ref, a file changed in this branch/PR is untrusted.
+        if suppression_base is None:
+            return True
+        return relname.replace("\\", "/") not in changed
+
     inputs: list[ScanInput] = []
     branch = current_branch(repo)
     if branch:
@@ -253,7 +281,14 @@ def scan_local(
                 content = path.read_text(encoding="utf-8", errors="replace")
             except OSError:
                 continue
-            inputs.append(build_input("file_content", content, location=relname))
+            inputs.append(
+                build_input(
+                    "file_content",
+                    content,
+                    location=relname,
+                    trust_suppressions=_trusts_suppressions(relname),
+                )
+            )
         elif suffix in CODE_SUFFIXES:
             try:
                 content = path.read_text(encoding="utf-8", errors="replace")

@@ -1,0 +1,89 @@
+{
+  "tool": "ward",
+  "version": "0.1.4",
+  "generated_at": "2026-07-02T15:50:44.225723+00:00",
+  "fail_on": "high",
+  "summary": {
+    "overall_recall_in_scope": 0.5353053435114504,
+    "overall_false_positive_rate_in_scope": 0.0
+  },
+  "corpora": [
+    {
+      "name": "lakera_ignore_instructions",
+      "fit": "in_scope",
+      "license": "MIT",
+      "upstream_url": "https://huggingface.co/datasets/Lakera/gandalf_ignore_instructions",
+      "total": 777,
+      "expected_positive": 777,
+      "expected_negative": 0,
+      "detected_positive": 449,
+      "detected_negative": 0,
+      "missed_positive": 328,
+      "recall": 0.5778635778635779,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "fired_categories": {
+        "io": 507,
+        "exf": 5,
+        "tool": 1,
+        "role": 1
+      }
+    },
+    {
+      "name": "deepset_prompt_injections",
+      "fit": "in_scope",
+      "license": "Apache-2.0",
+      "upstream_url": "https://huggingface.co/datasets/deepset/prompt-injections",
+      "total": 546,
+      "expected_positive": 203,
+      "expected_negative": 343,
+      "detected_positive": 44,
+      "detected_negative": 0,
+      "missed_positive": 159,
+      "recall": 0.21674876847290642,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "fired_categories": {
+        "io": 73,
+        "obf": 3,
+        "role": 2
+      }
+    },
+    {
+      "name": "spikee_jailbreaks",
+      "fit": "in_scope",
+      "license": "Apache-2.0",
+      "upstream_url": "https://github.com/WithSecureLabs/spikee",
+      "total": 68,
+      "expected_positive": 68,
+      "expected_negative": 0,
+      "detected_positive": 68,
+      "detected_negative": 0,
+      "missed_positive": 0,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "fired_categories": {
+        "io": 140,
+        "exf": 69,
+        "role": 4
+      }
+    },
+    {
+      "name": "advbench_harmful_behaviors",
+      "fit": "ceiling_test",
+      "license": "MIT",
+      "upstream_url": "https://github.com/llm-attacks/llm-attacks",
+      "total": 520,
+      "expected_positive": 520,
+      "expected_negative": 0,
+      "detected_positive": 0,
+      "detected_negative": 0,
+      "missed_positive": 520,
+      "recall": 0.0,
+      "precision": 0.0,
+      "false_positive_rate": 0.0,
+      "fired_categories": {}
+    }
+  ]
+}

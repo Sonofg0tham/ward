@@ -21,7 +21,8 @@ regression guard.
 |---------|--------------|-------------|-----------|----------|-------|
 | v0.1.1  | 60.0% (inaugural) | not measured | 0.0% | - | First public benchmark |
 | v0.1.2  | 75.2% | not measured | 0.0% | - | Rule expansion driven by inaugural misses |
-| v0.1.3  | 75.2% | **53.5%** | 0.0% | **0.0%** | First full-corpus number; TAG-block + bench-diff hardening |
+| v0.1.3  | 75.2% | 53.5% | 0.0% | 0.0% | First full-corpus number; TAG-block + bench-diff hardening |
+| v0.1.4  | 75.2% | 53.5% | 0.0% | 0.0% | Provenance-aware suppression (no detection change; hardening only) |
 
 ## How to reproduce
 
