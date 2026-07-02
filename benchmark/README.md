@@ -24,6 +24,7 @@ regression guard.
 | v0.1.3  | 75.2% | 53.5% | 0.0% | 0.0% | First full-corpus number; TAG-block + bench-diff hardening |
 | v0.1.4  | 75.2% | 53.5% | 0.0% | 0.0% | Provenance-aware suppression (no detection change; hardening only) |
 | v0.2.0  | 75.2% | 53.5% | 0.0% | 0.0% | Optional LLM judge tier - run `ward bench --judge` to measure the semantic-recall lift on top of these regex numbers |
+| v0.2.1  | 75.2% | 53.5% | 0.0% | 0.0% | Real reviewer-agent lab (`ward lab review`); no detection change |
 
 ## How to reproduce
 
