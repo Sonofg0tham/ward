@@ -61,7 +61,7 @@ runs:
         python -m pip install --upgrade pip
         # Pin to the tagged release matching the action ref. Users on a
         # major-version alias (@v1) get compatible minor updates automatically.
-        python -m pip install "ward-scanner>=0.1.3,<0.2"
+        python -m pip install "ward-scanner>=0.1.4,<0.2"
 
     - name: Run Ward
       id: run

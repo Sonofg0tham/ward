@@ -44,8 +44,20 @@ _IDENTIFIER_SURFACES: frozenset[Surface] = frozenset(
 _SUPPRESSION_SURFACES: frozenset[Surface] = frozenset({"file_content"})
 
 
-def build_input(surface: Surface, text: str, *, location: str = "") -> ScanInput:
-    """Wrap a raw string into a ``ScanInput`` with normalised + decoded forms."""
+def build_input(
+    surface: Surface,
+    text: str,
+    *,
+    location: str = "",
+    trust_suppressions: bool = True,
+) -> ScanInput:
+    """Wrap a raw string into a ``ScanInput`` with normalised + decoded forms.
+
+    ``trust_suppressions`` gates whether ``ward-allow-file`` directives in the
+    text are honoured. Set it to False for content whose provenance is
+    untrusted (e.g. a file changed by the current PR): the directive is then
+    ignored so an attacker cannot suppress detection by editing a doc file.
+    """
     if text is None:
         text = ""
     normalised = normalise_text(text)
@@ -67,7 +79,7 @@ def build_input(surface: Surface, text: str, *, location: str = "") -> ScanInput
         if form not in decoded and form != normalised:
             decoded.append(form)
     suppressed: frozenset[str] = frozenset()
-    if surface in _SUPPRESSION_SURFACES:
+    if trust_suppressions and surface in _SUPPRESSION_SURFACES:
         suppressed = extract_suppressions(text)
     return ScanInput(
         surface=surface,

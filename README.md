@@ -11,7 +11,7 @@ ingests before any LLM-based reviewer, SAST agent, or IaC scanner sees
 it. The job: catch prompt injection attempts embedded in the places that
 traditional security tools ignore.
 
-**Latest benchmark (v0.1.3):**
+**Latest benchmark (v0.1.4):**
 
 - **Smoke** (bundled 50-row samples, offline): 75.2% in-scope recall,
   0.0% false-positive rate.
@@ -20,8 +20,8 @@ traditional security tools ignore.
   and Spikee. AdvBench is a deliberate ceiling test at 0%.
 
 The 0.0% FPR on 271 benign deepset rows is the strongest signal here.
-Full reports in [`benchmark/v0.1.3-smoke.md`](benchmark/v0.1.3-smoke.md)
-and [`benchmark/v0.1.3-full.md`](benchmark/v0.1.3-full.md). Every PR gets
+Full reports in [`benchmark/v0.1.4-smoke.md`](benchmark/v0.1.4-smoke.md)
+and [`benchmark/v0.1.4-full.md`](benchmark/v0.1.4-full.md). Every PR gets
 its own bench-diff comment via the CI workflow.
 
 ## Why this exists
@@ -218,7 +218,7 @@ this into your `.pre-commit-config.yaml`:
 
 ```yaml
 - repo: https://github.com/sonofg0tham/ward
-  rev: v0.1.0
+  rev: v0.1.4
   hooks:
     - id: ward-scan-local
       args: [--fail-on, high]
@@ -238,7 +238,7 @@ useful as a CI gate).
 Add it to a workflow in three lines:
 
 ```yaml
-- uses: sonofg0tham/ward@v0.1.3
+- uses: sonofg0tham/ward@v0.1.4
   with:
     fail-on: high
 ```
@@ -256,7 +256,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: sonofg0tham/ward@v0.1.3
+      - uses: sonofg0tham/ward@v0.1.4
         with:
           fail-on: high
           format: sarif
@@ -378,14 +378,22 @@ commit messages, PR titles, or PR bodies. That asymmetry is deliberate:
 an attacker who can land a PR cannot ship a new source file whose top
 comment silences detection.
 
-**Important threat-model note:** the directive provides no protection
-against an attacker who can modify an existing documentation file in
-a PR. That kind of change is visible in PR review, but Ward will not
-flag the modification automatically. For path-scoped suppression that
-does not flow through scan content at all, use `.wardignore` at the
-repo root. A provenance-aware mode (where the directive is only
-honoured from files unchanged since the merge base) is on the v0.2
-roadmap.
+**Provenance-aware mode (recommended for CI).** By default the
+directive is honoured wherever it appears in a scanned doc file, which
+means an attacker who edits an existing doc file in a PR could add a
+directive to silence detection on that file. Close that gap by pointing
+`scan-local` at the base ref:
+
+```bash
+ward scan-local --suppression-base origin/main
+```
+
+With `--suppression-base`, Ward only honours directives in files that
+are **unchanged** since that ref. Any file the current branch or PR
+touched cannot suppress detection, so a PR-introduced directive is
+ignored and the payload fires. For path-scoped suppression that does
+not flow through scan content at all, use `.wardignore` at the repo
+root.
 
 Supported comment styles for the directive (file_content surface only):
 

@@ -70,10 +70,12 @@ do not adopt Ward expecting protection it cannot give:
 
 #### Operational caveats
 
-- The `ward-allow-file` directive provides no protection against an
-  attacker who can modify an existing documentation file in a PR. That
-  change is visible in PR review but Ward does not flag the modification
-  itself. A provenance-aware mode is on the v0.2 roadmap.
+- The `ward-allow-file` directive is honoured wherever it appears in a
+  scanned doc file by default, so an attacker who edits a doc file in a
+  PR could add a directive to suppress detection on that file. Close
+  this in CI with `ward scan-local --suppression-base <base-ref>`,
+  which only honours directives in files unchanged since the base ref.
+  Directives in files the PR touched are ignored.
 - Ward is a rule-based scanner, not a generative classifier. Novel
   zero-day injection techniques that do not match any rule pass through
   silently until the rule pack is updated.
