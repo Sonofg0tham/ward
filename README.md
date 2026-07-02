@@ -21,7 +21,7 @@ traditional security tools ignore.
 - **Optional LLM judge tier** recovers semantic injections regex
   structurally misses - measure the lift with `ward bench --judge`.
 
-The 0.0% FPR on 271 benign deepset rows is the strongest signal here.
+The 0.0% FPR on 343 benign deepset rows is the strongest signal here.
 Full reports in [`benchmark/v0.2.1-smoke.md`](benchmark/v0.2.1-smoke.md)
 and [`benchmark/v0.2.1-full.md`](benchmark/v0.2.1-full.md). Every PR gets
 its own bench-diff comment via the CI workflow.
