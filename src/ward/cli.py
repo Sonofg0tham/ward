@@ -852,6 +852,77 @@ def selftest(
 # --- lab subcommand ---------------------------------------------------------
 
 
+@lab_app.command("review")
+def lab_review(
+    reviewer: Annotated[
+        str,
+        typer.Option(
+            "--reviewer",
+            help="Reviewer agent: naive (offline) | anthropic (real Claude, needs [judge] + key).",
+        ),
+    ] = "naive",
+    model: Annotated[
+        str | None,
+        typer.Option("--model", help="Override the reviewer model (anthropic reviewer)."),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Where to write the report. Defaults to 'ward-lab-review.md'.",
+        ),
+    ] = None,
+    no_write: Annotated[
+        bool,
+        typer.Option("--no-write", help="Print the report to stdout instead of writing a file."),
+    ] = False,
+    fail_on: FailOnOption = "high",
+    rule_pack: RulePackOption = None,
+) -> None:
+    """Put a real AI reviewer agent behind Ward and show the before/after.
+
+    Each malicious PR is run two ways: the reviewer ingests the raw metadata
+    (no Ward), and Ward screens the metadata first (Ward blocks the injection
+    before the reviewer's context is populated). The output is a Markdown
+    document for a blog post or portfolio write-up. Defaults to the offline
+    'naive' reviewer so it runs with no API key.
+    """
+    from .demo import DEMOS
+    from .lab_reviewer import get_reviewer, render_markdown, run_review_lab
+
+    try:
+        agent = get_reviewer(reviewer, model=model)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    if not agent.available():
+        typer.echo(
+            f"Reviewer '{reviewer}' is not available (missing [judge] extra or "
+            "ANTHROPIC_API_KEY). Falling back to the offline 'naive' reviewer.",
+            err=True,
+        )
+        agent = get_reviewer("naive")
+
+    pack = load_rule_pack(rule_pack)
+    sev_fail = _parse_severity(fail_on, flag="--fail-on")
+    report = run_review_lab(DEMOS, agent, pack, fail_on=sev_fail)
+    body = render_markdown(report)
+
+    if no_write:
+        typer.echo(body)
+    else:
+        target = output or Path("ward-lab-review.md")
+        target.write_text(body, encoding="utf-8")
+        typer.echo(f"Wrote reviewer-lab report: {target}")
+        typer.echo(
+            f"Blocked by Ward: {report.blocked}/{report.total}.  "
+            f"Reviewer approved malicious PR without Ward: "
+            f"{report.compromised_without_ward}/{report.total}, with Ward: "
+            f"{report.compromised_with_ward}/{report.total}."
+        )
+
+
 @lab_app.command("attack")
 def lab_attack(
     output: Annotated[

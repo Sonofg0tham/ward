@@ -11,7 +11,7 @@ ingests before any LLM-based reviewer, SAST agent, or IaC scanner sees
 it. The job: catch prompt injection attempts embedded in the places that
 traditional security tools ignore.
 
-**Latest benchmark (v0.2.0):**
+**Latest benchmark (v0.2.1):**
 
 - **Smoke** (bundled 50-row samples, offline): 75.2% in-scope recall,
   0.0% false-positive rate.
@@ -22,8 +22,8 @@ traditional security tools ignore.
   structurally misses - measure the lift with `ward bench --judge`.
 
 The 0.0% FPR on 271 benign deepset rows is the strongest signal here.
-Full reports in [`benchmark/v0.2.0-smoke.md`](benchmark/v0.2.0-smoke.md)
-and [`benchmark/v0.2.0-full.md`](benchmark/v0.2.0-full.md). Every PR gets
+Full reports in [`benchmark/v0.2.1-smoke.md`](benchmark/v0.2.1-smoke.md)
+and [`benchmark/v0.2.1-full.md`](benchmark/v0.2.1-full.md). Every PR gets
 its own bench-diff comment via the CI workflow.
 
 ## Why this exists
@@ -253,10 +253,29 @@ ward lab attack
 # Blocked by Ward: 5/5 scenarios.
 ```
 
-The mock reviewer agent does not call an LLM. The lab demonstrates
-whether the untrusted instruction would have reached the agent's
-context window, not what the LLM would have done with it. Wiring in a
-real reviewer is the next step.
+`ward lab attack` uses a deterministic mock and shows whether the
+untrusted instruction would have *reached* an agent's context.
+
+To go further and put a **real reviewer agent** behind Ward, use
+`ward lab review`:
+
+```bash
+# Offline reviewer (no API key) - deterministic, models a naive agent:
+ward lab review
+# Blocked by Ward: 6/6.  Reviewer approved malicious PR without Ward: 5/6, with Ward: 0/6.
+
+# Real Claude reviewer:
+pip install "ward-scanner[judge]" && export ANTHROPIC_API_KEY=sk-...
+ward lab review --reviewer anthropic
+```
+
+Each malicious PR runs two ways: the reviewer ingests the raw metadata
+(no Ward), and Ward screens it first (blocked before the reviewer's
+context is populated). The report is written honestly - the point is
+not that the model always gets hijacked (modern models often resist),
+but that **Ward turns "hope the model resists" into "the model never
+sees it"**: a deterministic, offline, model-agnostic gate. Paste the
+Markdown into a blog post or portfolio write-up.
 
 Flags: `--output <path>`, `--no-write` (print to stdout),
 `--fail-on <severity>`.
@@ -268,7 +287,7 @@ this into your `.pre-commit-config.yaml`:
 
 ```yaml
 - repo: https://github.com/sonofg0tham/ward
-  rev: v0.2.0
+  rev: v0.2.1
   hooks:
     - id: ward-scan-local
       args: [--fail-on, high]
@@ -288,7 +307,7 @@ useful as a CI gate).
 Add it to a workflow in three lines:
 
 ```yaml
-- uses: sonofg0tham/ward@v0.2.0
+- uses: sonofg0tham/ward@v0.2.1
   with:
     fail-on: high
 ```
@@ -306,7 +325,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: sonofg0tham/ward@v0.2.0
+      - uses: sonofg0tham/ward@v0.2.1
         with:
           fail-on: high
           format: sarif

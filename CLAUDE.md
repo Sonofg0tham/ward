@@ -11,6 +11,7 @@ Pre-agent metadata scanner. Catches prompt injection in branch names, commits, P
 - `src/ward/reporters/` - pretty, json, sarif output.
 - `src/ward/bench/` - benchmark harness (corpora, runner, report, compare, download) + bundled samples.
 - `src/ward/judge/` - optional LLM judge tier (base, mock, anthropic_judge, prompt). Off by default; needs the [judge] extra.
+- `src/ward/lab.py` + `src/ward/lab_reviewer.py` - lab harnesses. `lab attack` (metadata-flow demo, mock) and `lab review` (real reviewer agent: NaiveReviewer offline / AnthropicReviewer via [judge]).
 - `action.yml` - the GitHub Action at repo root (inputs: pr, fail-on, format, upload-sarif...). entrypoint under `action/`.
 - `tests/fixtures/` - numbered YAML attack fixtures; `tests/fixtures/clean/` - false-positive fixtures that must NOT trigger.
 
