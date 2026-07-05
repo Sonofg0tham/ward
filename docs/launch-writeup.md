@@ -29,7 +29,7 @@ Ward is a pre-agent metadata scanner. It reads the untrusted text an AI reviewer
 
 That "before" is the whole point. Ward does not sit at the LLM boundary like Lakera or LlamaFirewall. It does not scan your source like SAST. It is an earlier layer than either. Defence in depth, not a replacement for anything you already run.
 
-It is a Python CLI (the `ward` command), a GitHub Action, a pre-commit hook, and a small SDK. Output is pretty terminal text, JSON, or SARIF so findings land in your GitHub Code Scanning tab. MIT licence. Zero telemetry. It pairs with my other tool, Quell, and comes out of CJM Labs / sonofg0tham.
+It is a Python CLI (the `ward` command), a GitHub Action, a pre-commit hook, and a small SDK. Output is pretty terminal text, JSON, or SARIF so findings land in your GitHub Code Scanning tab. MIT licence. Zero telemetry. It pairs with my other tool, Quell, and comes out of Sonofg0tham.
 
 Under the hood there are two tiers.
 
