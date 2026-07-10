@@ -1,5 +1,5 @@
 name: "Ward - Pre-Agent Metadata Scanner"
-description: "Catches prompt injection in branch names, commit messages, PR titles and file names before an AI code reviewer reads them. SARIF-native. Zero telemetry."
+description: "Catches prompt injection in branch names, commits, PR titles and filenames before an AI code reviewer reads them."
 author: "Craig McCart"
 branding:
   icon: "shield"
