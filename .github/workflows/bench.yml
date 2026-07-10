@@ -52,7 +52,7 @@ jobs:
           cat "${{ runner.temp }}/diff.md"
 
       - name: Post / update sticky PR comment
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         # Skip on forks: they do not have write permission to comment on the PR.
         if: ${{ github.event.pull_request.head.repo.fork == false }}
         with:
