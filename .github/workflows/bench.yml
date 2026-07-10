@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out PR HEAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: pr
 
       - name: Check out base ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           path: base
