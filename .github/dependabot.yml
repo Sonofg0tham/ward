@@ -23,6 +23,8 @@ updates:
         dependency-type: "production"
         update-types: ["patch"]
 
+  # Covers .github/workflows AND the root action.yml (the composite
+  # action moved from action/ to the repo root for Marketplace listing).
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -31,14 +33,4 @@ updates:
     open-pull-requests-limit: 3
     commit-message:
       prefix: "ci"
-      include: "scope"
-
-  - package-ecosystem: "github-actions"
-    directory: "/action"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
-    commit-message:
-      prefix: "action"
       include: "scope"
