@@ -4,9 +4,10 @@ Every release commits its own numbers here so Ward's detection envelope
 is auditable across versions. Two flavours per release:
 
 - **`vX.Y.Z-smoke.{md,json}`** - scores against the 50-row samples
-  bundled with the wheel. Deterministic, offline, quick. This is what
-  `ward bench` produces without a network dependency and what the CI
-  bench-diff job compares against on every PR.
+  bundled with the wheel. Deterministic, offline, quick. Generate with
+  `ward bench --no-cache` (the flag guarantees the bundled samples are
+  scored even on a machine that has downloaded the full corpora). This
+  is what the CI bench-diff job compares against on every PR.
 - **`vX.Y.Z-full.{md,json}`** - scores against the full upstream
   corpora fetched by `ward bench --download <corpus>`. Real-world
   numbers. Longer tail of adversarial phrasings than the smoke sample
@@ -25,6 +26,7 @@ regression guard.
 | v0.1.4  | 75.2% | 53.5% | 0.0% | 0.0% | Provenance-aware suppression (no detection change; hardening only) |
 | v0.2.0  | 75.2% | 53.5% | 0.0% | 0.0% | Optional LLM judge tier - run `ward bench --judge` to measure the semantic-recall lift on top of these regex numbers |
 | v0.2.1  | 75.2% | 53.5% | 0.0% | 0.0% | Real reviewer-agent lab (`ward lab review`); no detection change |
+| v0.2.2  | 75.2% | 53.5% | 0.0% | 0.0% | First PyPI release; `bench --no-cache` flag + truthful report caveats; no detection change |
 
 ## How to reproduce
 
