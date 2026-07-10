@@ -19,7 +19,7 @@ ingests before any LLM-based reviewer, SAST agent, or IaC scanner sees
 it. The job: catch prompt injection attempts embedded in the places that
 traditional security tools ignore.
 
-**Latest benchmark (v0.2.2):**
+**Latest benchmark (v0.2.3):**
 
 - **Smoke** (bundled 50-row samples, offline): 75.2% in-scope recall,
   0.0% false-positive rate.
@@ -30,8 +30,8 @@ traditional security tools ignore.
   structurally misses - measure the lift with `ward bench --judge`.
 
 The 0.0% FPR on 343 benign deepset rows is the strongest signal here.
-Full reports in [`benchmark/v0.2.2-smoke.md`](benchmark/v0.2.2-smoke.md)
-and [`benchmark/v0.2.2-full.md`](benchmark/v0.2.2-full.md). Every PR gets
+Full reports in [`benchmark/v0.2.3-smoke.md`](benchmark/v0.2.3-smoke.md)
+and [`benchmark/v0.2.3-full.md`](benchmark/v0.2.3-full.md). Every PR gets
 its own bench-diff comment via the CI workflow.
 
 ## Why this exists
@@ -295,7 +295,7 @@ this into your `.pre-commit-config.yaml`:
 
 ```yaml
 - repo: https://github.com/sonofg0tham/ward
-  rev: v0.2.2
+  rev: v0.2.3
   hooks:
     - id: ward-scan-local
       args: [--fail-on, high]
@@ -315,7 +315,7 @@ useful as a CI gate).
 Add it to a workflow in three lines:
 
 ```yaml
-- uses: sonofg0tham/ward@v0.2.2
+- uses: sonofg0tham/ward@v0.2.3
   with:
     fail-on: high
 ```
@@ -333,7 +333,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: sonofg0tham/ward@v0.2.2
+      - uses: sonofg0tham/ward@v0.2.3
         with:
           fail-on: high
           format: sarif
