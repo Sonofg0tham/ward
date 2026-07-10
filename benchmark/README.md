@@ -27,6 +27,7 @@ regression guard.
 | v0.2.0  | 75.2% | 53.5% | 0.0% | 0.0% | Optional LLM judge tier - run `ward bench --judge` to measure the semantic-recall lift on top of these regex numbers |
 | v0.2.1  | 75.2% | 53.5% | 0.0% | 0.0% | Real reviewer-agent lab (`ward lab review`); no detection change |
 | v0.2.2  | 75.2% | 53.5% | 0.0% | 0.0% | First PyPI release; `bench --no-cache` flag + truthful report caveats; no detection change |
+| v0.2.3  | 75.2% | 53.5% | 0.0% | 0.0% | Ward visual identity (logo, badges, social preview); no detection change |
 
 ## How to reproduce
 
