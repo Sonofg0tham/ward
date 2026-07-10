@@ -1,0 +1,35 @@
+/* Ward brand tokens - generated from brand.md. Dark-first. */
+
+:root {
+  /* palette */
+  --ward-bg: hsl(20 8% 8%);
+  --ward-fg: hsl(30 12% 91%);
+  --ward-accent: hsl(20 78% 52%);
+  --ward-accent-muted: hsl(20 60% 46%);
+  --ward-border: hsl(20 8% 20%);
+  --ward-muted: hsl(20 6% 62%);
+  --ward-surface: hsl(20 8% 11%);
+  --ward-surface-raised: hsl(20 8% 14%);
+
+  /* type */
+  --ward-font-display: "Clash Display", "Segoe UI", sans-serif;
+  --ward-font-body: "General Sans", "Segoe UI", sans-serif;
+  --ward-font-mono: "IBM Plex Mono", Consolas, monospace;
+
+  /* shape */
+  --ward-radius: 0.375rem;
+
+  /* the ward cut: 45-degree notch, used via clip-path on badges/dividers */
+  --ward-cut: polygon(0 0, calc(100% - 0.75rem) 0, 100% 0.75rem, 100% 100%, 0 100%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --ward-bg: hsl(30 20% 97%);
+    --ward-fg: hsl(20 10% 12%);
+    --ward-border: hsl(25 12% 86%);
+    --ward-muted: hsl(20 8% 42%);
+    --ward-surface: hsl(30 18% 94%);
+    --ward-surface-raised: hsl(0 0% 100%);
+  }
+}

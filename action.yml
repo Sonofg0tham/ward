@@ -3,7 +3,7 @@ description: "Catches prompt injection in branch names, commits, PR titles and f
 author: "Craig McCart"
 branding:
   icon: "shield"
-  color: "blue"
+  color: "orange"
 
 inputs:
   pr:

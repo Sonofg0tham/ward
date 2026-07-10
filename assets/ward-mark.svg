@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Ward mark">
+  <defs>
+    <mask id="wm-cut">
+      <rect width="64" height="64" fill="white"/>
+      <line x1="8" y1="50" x2="48" y2="10" stroke="black" stroke-width="4"/>
+    </mask>
+    <mask id="wm-ember">
+      <rect width="64" height="64" fill="black"/>
+      <path d="M14 16 L22.5 50 L31 27 L39.5 50 L48 16" fill="none" stroke="white" stroke-width="6.5" stroke-linecap="butt" stroke-linejoin="miter"/>
+    </mask>
+  </defs>
+  <!-- iron badge, one chamfered (ward-cut) corner -->
+  <path d="M6 0 H52 L64 12 V58 a6 6 0 0 1 -6 6 H6 a6 6 0 0 1 -6 -6 V6 a6 6 0 0 1 6 -6 Z" fill="#161413" stroke="#3A3430" stroke-width="1"/>
+  <!-- the W, stencil-cut at 45 degrees -->
+  <path d="M14 16 L22.5 50 L31 27 L39.5 50 L48 16" fill="none" stroke="#EBE7E1" stroke-width="6.5" stroke-linecap="butt" stroke-linejoin="miter" mask="url(#wm-cut)"/>
+  <!-- the ember, glowing only inside the cut strokes -->
+  <line x1="8" y1="50" x2="48" y2="10" stroke="#E4642A" stroke-width="2.6" mask="url(#wm-ember)"/>
+</svg>

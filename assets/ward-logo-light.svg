@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 178 64" width="178" height="64" role="img" aria-label="Ward">
+  <!-- For light backgrounds. Stencil-cut geometric caps; the W carries the ward cut. -->
+  <defs>
+    <mask id="wll-cut">
+      <rect width="178" height="64" fill="white"/>
+      <line x1="2" y1="50" x2="42" y2="10" stroke="black" stroke-width="4"/>
+    </mask>
+    <mask id="wll-ember">
+      <rect width="178" height="64" fill="black"/>
+      <path d="M8 12 L16.5 52 L25 27 L33.5 52 L42 12" fill="none" stroke="white" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
+    </mask>
+  </defs>
+  <g fill="none" stroke="#221D18" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter">
+    <!-- W (cut) -->
+    <path d="M8 12 L16.5 52 L25 27 L33.5 52 L42 12" mask="url(#wll-cut)"/>
+    <!-- A: joined apex, stencil-gapped crossbar -->
+    <path d="M57 52 L71 12 L85 52"/>
+    <line x1="64.5" y1="39" x2="77.5" y2="39"/>
+    <!-- R: stem, chamfered bowl detached stencil-style, straight leg -->
+    <line x1="100" y1="12" x2="100" y2="52"/>
+    <path d="M107 15.5 L116 15.5 L121 20.5 L121 27 L116 32 L107 32"/>
+    <line x1="111" y1="34" x2="122" y2="52"/>
+    <!-- D: stem, chamfered body detached stencil-style -->
+    <line x1="134" y1="12" x2="134" y2="52"/>
+    <path d="M141 15.5 L149 15.5 L155 21.5 L155 42.5 L149 48.5 L141 48.5"/>
+  </g>
+  <!-- the ember, glowing only inside the W's cut strokes -->
+  <line x1="2" y1="50" x2="42" y2="10" stroke="#D8581E" stroke-width="2.6" mask="url(#wll-ember)"/>
+</svg>
