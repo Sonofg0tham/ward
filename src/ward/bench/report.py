@@ -104,12 +104,28 @@ def render_markdown(report: BenchReport) -> str:
     lines.append("")
     lines.append("## Honest caveats")
     lines.append("")
-    lines.append(
-        "These numbers are from bundled 50-row samples of each upstream "
-        "corpus, redistributed under each upstream's MIT or Apache 2.0 licence. "
-        "Run `ward bench --download <corpus>` to score against the full sets "
-        "(coming in v0.2). The samples are a smoke test, not a final word."
-    )
+    sources = {r.source for r in report.results}
+    if sources == {"full"}:
+        lines.append(
+            "These numbers are from the full upstream corpora fetched with "
+            "`ward bench --download`, each redistributed under the upstream's "
+            "MIT or Apache 2.0 licence."
+        )
+    elif sources == {"sample"}:
+        lines.append(
+            "These numbers are from bundled 50-row samples of each upstream "
+            "corpus, redistributed under each upstream's MIT or Apache 2.0 licence. "
+            "Run `ward bench --download <corpus>` to score against the full sets. "
+            "The samples are a smoke test, not a final word."
+        )
+    else:
+        full = ", ".join(sorted(r.corpus.name for r in report.results if r.source == "full"))
+        sampled = ", ".join(sorted(r.corpus.name for r in report.results if r.source == "sample"))
+        lines.append(
+            f"Mixed sources: full downloaded corpora for {full}; bundled 50-row "
+            f"samples for {sampled}. Run `ward bench --download <corpus>` to "
+            "score every corpus against its full set."
+        )
     lines.append("")
     lines.append(
         "The ceiling-test corpus (`advbench_harmful_behaviors`) intentionally "
@@ -143,6 +159,7 @@ def render_json(report: BenchReport) -> str:
                 "license": r.corpus.license,
                 "upstream_url": r.corpus.upstream_url,
                 "total": r.total,
+                "source": r.source,
                 "expected_positive": r.expected_positive,
                 "expected_negative": r.expected_negative,
                 "detected_positive": r.detected_positive,

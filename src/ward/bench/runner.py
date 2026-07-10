@@ -31,6 +31,7 @@ class CorpusResult:
     detected_negative: int  # false positives (benign rows that triggered)
     missed_positive: int  # false negatives (injection rows that did not trigger)
     fired_categories: dict[str, int] = field(default_factory=dict)
+    source: str = "sample"  # "sample" (bundled 50-row) or "full" (downloaded corpus)
     judge_ran: bool = False
     judge_recovered_positive: int = 0  # expected-positive rows regex missed, judge caught
     judge_false_positive: int = 0  # expected-negative rows regex passed, judge flagged
@@ -128,6 +129,7 @@ def run_benchmark(
     fail_on: Severity = Severity.HIGH,
     judge: Judge | None = None,
     judge_threshold: float = 0.5,
+    use_cache: bool = True,
 ) -> BenchReport:
     """Scan each corpus and return the aggregated report.
 
@@ -136,13 +138,19 @@ def run_benchmark(
     as a recovery (on an expected-positive row) or a new false positive (on an
     expected-negative row). The judge is never asked about rows regex already
     caught, so its cost scales with the miss set, not the whole corpus.
+
+    ``use_cache=False`` ignores any downloaded full corpora and scores the
+    bundled smoke samples, so a machine that has run ``--download`` can still
+    produce a true smoke report.
     """
     from .. import __version__
+    from .download import is_cached
 
     pack = rule_pack or load_rule_pack()
     results: list[CorpusResult] = []
     for corpus in corpora:
-        rows = load_rows(corpus)
+        rows = load_rows(corpus, use_cache=use_cache)
+        source = "full" if (use_cache and is_cached(corpus.name)) else "sample"
         surface = _surface_for(corpus)
         expected_positive = sum(1 for _, ep in rows if ep)
         expected_negative = sum(1 for _, ep in rows if not ep)
@@ -187,6 +195,7 @@ def run_benchmark(
                 detected_negative=detected_negative,
                 missed_positive=missed_positive,
                 fired_categories=fired_categories,
+                source=source,
                 judge_ran=judge is not None,
                 judge_recovered_positive=judge_recovered_positive,
                 judge_false_positive=judge_false_positive,

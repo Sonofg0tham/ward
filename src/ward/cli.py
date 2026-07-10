@@ -546,6 +546,17 @@ def bench(
         float,
         typer.Option("--judge-threshold", help="Min judge confidence to count as a detection."),
     ] = 0.5,
+    no_cache: Annotated[
+        bool,
+        typer.Option(
+            "--no-cache",
+            help=(
+                "Ignore any downloaded full corpora and score the bundled 50-row "
+                "smoke samples. Use this to generate a true smoke report on a "
+                "machine that has previously run --download."
+            ),
+        ),
+    ] = False,
     fail_on: FailOnOption = "high",
     rule_pack: RulePackOption = None,
 ) -> None:
@@ -610,6 +621,7 @@ def bench(
         fail_on=sev_fail,
         judge=judge,
         judge_threshold=judge_threshold,
+        use_cache=not no_cache,
     )
 
     fmt_lower = fmt.lower()

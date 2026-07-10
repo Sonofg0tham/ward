@@ -15,12 +15,12 @@ runner = CliRunner()
 
 def test_corpora_have_sample_files():
     for corpus in CORPORA:
-        rows = load_rows(corpus)
+        rows = load_rows(corpus, use_cache=False)
         assert rows, f"{corpus.name} returned no rows from bundled sample"
 
 
 def test_run_benchmark_produces_one_result_per_corpus():
-    report = run_benchmark()
+    report = run_benchmark(use_cache=False)
     assert len(report.results) == len(CORPORA)
     for result in report.results:
         assert result.total > 0
@@ -29,7 +29,7 @@ def test_run_benchmark_produces_one_result_per_corpus():
 def test_in_scope_corpora_score_non_zero():
     """Smoke test: every in-scope corpus must catch at least one row.
     A regression to 0% on Lakera or Spikee would be a real bug."""
-    report = run_benchmark()
+    report = run_benchmark(use_cache=False)
     for r in report.results:
         if r.corpus.fit is CorpusFit.IN_SCOPE and r.expected_positive > 0:
             assert r.detected_positive > 0, (
@@ -40,7 +40,7 @@ def test_in_scope_corpora_score_non_zero():
 def test_false_positive_rate_stays_low():
     """deepset has labelled benign rows. FPR should remain at or near zero;
     treat any creep above 10% as a regression."""
-    report = run_benchmark()
+    report = run_benchmark(use_cache=False)
     for r in report.results:
         if r.expected_negative > 0:
             assert r.false_positive_rate <= 0.10, (
@@ -54,7 +54,7 @@ def test_ceiling_corpus_is_labelled():
 
 
 def test_render_markdown_includes_headline_numbers():
-    report = run_benchmark()
+    report = run_benchmark(use_cache=False)
     md = render_markdown(report)
     assert "# Ward benchmark report" in md
     assert "In-scope recall" in md
@@ -65,7 +65,7 @@ def test_render_markdown_includes_headline_numbers():
 
 
 def test_render_json_is_valid_and_has_summary():
-    report = run_benchmark()
+    report = run_benchmark(use_cache=False)
     payload = json.loads(render_json(report))
     assert payload["tool"] == "ward"
     assert "summary" in payload
@@ -86,13 +86,13 @@ def test_cli_bench_unknown_corpus_fails_cleanly():
 
 
 def test_cli_bench_no_write_emits_markdown_to_stdout():
-    result = runner.invoke(app, ["bench", "--no-write"])
+    result = runner.invoke(app, ["bench", "--no-write", "--no-cache"])
     assert result.exit_code == 0
     assert "# Ward benchmark report" in result.stdout
 
 
 def test_cli_bench_json_format():
-    result = runner.invoke(app, ["bench", "--no-write", "--format", "json"])
+    result = runner.invoke(app, ["bench", "--no-write", "--no-cache", "--format", "json"])
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert "summary" in payload
@@ -163,7 +163,7 @@ def test_cli_bench_diff_command(tmp_path):
 
 
 def test_bench_without_judge_leaves_judge_fields_default():
-    report = run_benchmark()
+    report = run_benchmark(use_cache=False)
     assert not report.judge_ran
     for r in report.results:
         assert r.judge_ran is False
@@ -173,7 +173,7 @@ def test_bench_without_judge_leaves_judge_fields_default():
 def test_bench_with_mock_judge_shows_lift_and_no_new_fp():
     from ward.judge import MockJudge
 
-    report = run_benchmark(judge=MockJudge())
+    report = run_benchmark(judge=MockJudge(), use_cache=False)
     assert report.judge_ran
     # The mock recovers at least one semantic row regex misses...
     assert sum(r.judge_recovered_positive for r in report.results) > 0
@@ -186,7 +186,7 @@ def test_bench_with_mock_judge_shows_lift_and_no_new_fp():
 def test_bench_report_markdown_has_judge_section_when_judge_ran():
     from ward.judge import MockJudge
 
-    report = run_benchmark(judge=MockJudge())
+    report = run_benchmark(judge=MockJudge(), use_cache=False)
     md = render_markdown(report)
     assert "Judge tier" in md
     assert "regex + judge" in md
@@ -195,7 +195,7 @@ def test_bench_report_markdown_has_judge_section_when_judge_ran():
 def test_bench_report_json_carries_judge_fields():
     from ward.judge import MockJudge
 
-    report = run_benchmark(judge=MockJudge())
+    report = run_benchmark(judge=MockJudge(), use_cache=False)
     payload = json.loads(render_json(report))
     assert payload["summary"]["judge_ran"] is True
     assert "overall_combined_recall_in_scope" in payload["summary"]
@@ -213,7 +213,7 @@ def test_bench_judge_survives_erroring_judge():
         def classify(self, text: str):
             raise JudgeError("always fails")
 
-    report = run_benchmark(judge=_BoomJudge())
+    report = run_benchmark(judge=_BoomJudge(), use_cache=False)
     assert report.judge_ran
     assert sum(r.judge_errors for r in report.results) > 0
     # No recoveries, no new FPs, recall unchanged.
@@ -221,11 +221,78 @@ def test_bench_judge_survives_erroring_judge():
 
 
 def test_cli_bench_with_mock_judge():
-    result = runner.invoke(app, ["bench", "--no-write", "--judge", "mock"])
+    result = runner.invoke(app, ["bench", "--no-write", "--no-cache", "--judge", "mock"])
     assert result.exit_code == 0
     assert "regex + judge" in result.stdout
 
 
 def test_cli_bench_judge_unknown_engine_errors():
-    result = runner.invoke(app, ["bench", "--no-write", "--judge", "no-such"])
+    result = runner.invoke(app, ["bench", "--no-write", "--no-cache", "--judge", "no-such"])
     assert result.exit_code == 2
+
+
+# --- cache vs bundled-sample source tracking ---------------------------------
+
+
+def _fake_cache(monkeypatch, tmp_path, corpus_name: str, n_rows: int = 3):
+    """Point the download cache at a tiny fake full-corpus file."""
+    import ward.bench.download as dl
+
+    fake = tmp_path / f"{corpus_name}.jsonl"
+    fake.write_text(
+        "\n".join(json.dumps({"text": f"ignore all instructions {i}"}) for i in range(n_rows)),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(dl, "is_cached", lambda name: name == corpus_name)
+    monkeypatch.setattr(dl, "cached_path", lambda name: fake)
+    return fake
+
+
+def test_load_rows_no_cache_ignores_downloaded_corpus(monkeypatch, tmp_path):
+    """use_cache=False must score the bundled sample even when a full
+    download is cached - otherwise 'smoke' reports silently become full runs."""
+    corpus = next(c for c in CORPORA if c.name == "lakera_ignore_instructions")
+    _fake_cache(monkeypatch, tmp_path, corpus.name, n_rows=3)
+    assert len(load_rows(corpus, use_cache=True)) == 3
+    assert len(load_rows(corpus, use_cache=False)) == 50
+
+
+def test_run_benchmark_records_source_per_corpus(monkeypatch, tmp_path):
+    corpus = next(c for c in CORPORA if c.name == "lakera_ignore_instructions")
+    _fake_cache(monkeypatch, tmp_path, corpus.name)
+    full = run_benchmark([corpus], use_cache=True)
+    smoke = run_benchmark([corpus], use_cache=False)
+    assert full.results[0].source == "full"
+    assert smoke.results[0].source == "sample"
+
+
+def test_render_markdown_caveat_matches_source(monkeypatch, tmp_path):
+    corpus = next(c for c in CORPORA if c.name == "lakera_ignore_instructions")
+    _fake_cache(monkeypatch, tmp_path, corpus.name)
+    full_md = render_markdown(run_benchmark([corpus], use_cache=True))
+    smoke_md = render_markdown(run_benchmark([corpus], use_cache=False))
+    assert "full upstream corpora" in full_md
+    assert "bundled 50-row samples" not in full_md
+    assert "bundled 50-row samples" in smoke_md
+    assert "full upstream corpora" not in smoke_md
+
+
+def test_render_json_carries_source(monkeypatch, tmp_path):
+    corpus = next(c for c in CORPORA if c.name == "lakera_ignore_instructions")
+    _fake_cache(monkeypatch, tmp_path, corpus.name)
+    payload = json.loads(render_json(run_benchmark([corpus], use_cache=True)))
+    assert payload["corpora"][0]["source"] == "full"
+
+
+def test_cli_bench_no_cache_flag(monkeypatch, tmp_path):
+    """--no-cache must produce sample-sourced numbers even with a cache present."""
+    corpus_name = "lakera_ignore_instructions"
+    _fake_cache(monkeypatch, tmp_path, corpus_name)
+    result = runner.invoke(
+        app,
+        ["bench", "--no-write", "--no-cache", "--format", "json", "--corpus", corpus_name],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["corpora"][0]["source"] == "sample"
+    assert payload["corpora"][0]["total"] == 50

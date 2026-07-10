@@ -35,13 +35,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install ./base
-          ward bench --format json --output "${{ runner.temp }}/base.json"
+          ward bench --no-cache --format json --output "${{ runner.temp }}/base.json"
           python -m pip uninstall -y ward-scanner
 
       - name: Bench the PR branch
         run: |
           python -m pip install ./pr
-          ward bench --format json --output "${{ runner.temp }}/pr.json"
+          ward bench --no-cache --format json --output "${{ runner.temp }}/pr.json"
 
       - name: Compute diff
         run: |

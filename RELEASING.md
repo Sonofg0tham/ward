@@ -37,9 +37,16 @@ Once the trusted publisher exists and `PYPI_READY=true`:
 2. Regenerate the benchmark reports and commit them (keeps the detection
    envelope auditable per release):
    ```bash
-   ward bench --output benchmark/vX.Y.Z-smoke.md
-   ward bench --format json --output benchmark/vX.Y.Z-smoke.json
+   ward bench --no-cache --output benchmark/vX.Y.Z-smoke.md
+   ward bench --no-cache --format json --output benchmark/vX.Y.Z-smoke.json
+   ward bench --download lakera_ignore_instructions \
+              --download deepset_prompt_injections \
+              --download spikee_jailbreaks \
+              --download advbench_harmful_behaviors \
+              --output benchmark/vX.Y.Z-full.md   # repeat with --format json
    ```
+   `--no-cache` matters: without it, a machine that has ever run
+   `--download` silently scores the full corpora and labels them smoke.
 3. Commit, push, then tag and push the tag:
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z"
