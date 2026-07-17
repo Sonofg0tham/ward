@@ -9,7 +9,7 @@ description = "Pre-agent metadata scanner. Catches prompt injection in branch na
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "Craig McCart", email = "craig.mccart@outlook.com" }]
+authors = [{ name = "Craig McCart" }]
 keywords = [
   "security",
   "prompt-injection",

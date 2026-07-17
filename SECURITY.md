@@ -102,8 +102,7 @@ still applies.
 If you find a security issue in Ward itself, please do not open a public
 GitHub issue.
 
-Email: `craig.mccart@outlook.com`
-Subject line: `[WARD SECURITY]` followed by a short title.
+Report privately via [GitHub Security Advisories](https://github.com/Sonofg0tham/ward/security/advisories/new).
 
 Please include:
 - A description of the issue.
