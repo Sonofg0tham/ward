@@ -163,6 +163,15 @@ def download(corpus_name: str, *, force: bool = False) -> Path:
 
     Idempotent by default: if the file already exists a re-download is
     skipped. Pass ``force=True`` to refresh.
+
+    The write is atomic. Fetchers used to stream straight into the cache
+    path, so anything that interrupted the loop - upstream schema drift
+    (the source URLs track a branch, not a pinned revision), a disk-full
+    error, Ctrl-C - left a truncated file behind that ``is_cached()``
+    happily reported as present. Every later ``ward bench`` on that machine
+    then scored the stub and published it under "these numbers are from the
+    full upstream corpora", which is the worst kind of wrong number: quiet,
+    plausible, and load-bearing for the headline claim.
     """
     if corpus_name not in _FETCHERS:
         raise ValueError(f"Unknown corpus: {corpus_name}")
@@ -170,7 +179,15 @@ def download(corpus_name: str, *, force: bool = False) -> Path:
     if target.exists() and not force:
         return target
     fetcher = _FETCHERS[corpus_name]
-    n = fetcher(target)
-    if n == 0:
-        raise RuntimeError(f"{corpus_name}: upstream returned zero rows")
+    partial = target.with_name(target.name + ".part")
+    try:
+        n = fetcher(partial)
+        if n == 0:
+            raise RuntimeError(f"{corpus_name}: upstream returned zero rows")
+        # Only now is the data complete enough to be called a corpus.
+        os.replace(partial, target)
+    except BaseException:
+        # BaseException so KeyboardInterrupt cannot leave a stub behind either.
+        partial.unlink(missing_ok=True)
+        raise
     return target

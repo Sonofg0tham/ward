@@ -21,8 +21,60 @@ The trailing-comment syntax mirrors ``.gitignore`` for familiarity.
 
 from __future__ import annotations
 
-from fnmatch import fnmatchcase
+import re
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
+
+
+@lru_cache(maxsize=512)
+def _compile(pattern: str) -> re.Pattern[str]:
+    """Translate a glob to a regex where ``*`` stays inside one path segment.
+
+    ``fnmatch`` translates ``*`` to ``.*``, which crosses ``/``. That made
+    every pattern implicitly recursive: a maintainer writing ``docs/*`` to
+    skip the top-level pages also silenced content scanning for
+    ``docs/internal/anything/evil.md``, with nothing to say more had been
+    suppressed than was asked for. Since ``.wardignore`` is committed, an
+    attacker can read it and place a payload at the deeper path.
+
+    Segment-aware instead, matching the documented behaviour:
+      ``*``    any run of characters within one segment
+      ``**``   any run of characters, crossing segments
+      ``**/``  zero or more leading directories
+      ``?``    one character, not a separator
+    """
+    out: list[str] = []
+    i, n = 0, len(pattern)
+    while i < n:
+        ch = pattern[i]
+        if ch == "*":
+            if pattern.startswith("**/", i):
+                out.append("(?:.*/)?")
+                i += 3
+            elif pattern.startswith("**", i):
+                out.append(".*")
+                i += 2
+            else:
+                out.append("[^/]*")
+                i += 1
+        elif ch == "?":
+            out.append("[^/]")
+            i += 1
+        elif ch == "[":
+            close = pattern.find("]", i + 1)
+            if close == -1:
+                out.append(re.escape(ch))
+                i += 1
+            else:
+                body = pattern[i + 1 : close]
+                if body.startswith("!"):
+                    body = "^" + body[1:]
+                out.append(f"[{body}]")
+                i = close + 1
+        else:
+            out.append(re.escape(ch))
+            i += 1
+    return re.compile(r"\A" + "".join(out) + r"\Z")
 
 
 def load_patterns(repo: Path) -> tuple[str, ...]:
@@ -51,14 +103,15 @@ def is_ignored(relpath: str, patterns: tuple[str, ...]) -> bool:
         return False
     normalised = PurePosixPath(relpath.replace("\\", "/")).as_posix()
     for pattern in patterns:
-        # fnmatch's `**` is non-greedy across separators, but it does work
-        # when combined with normal `*` segments. We try both the verbatim
-        # pattern and a fallback that anchors with `**/` so trailing-glob
-        # patterns like `src/ward/**` match.
-        if fnmatchcase(normalised, pattern):
+        if _compile(pattern).match(normalised):
             return True
-        if pattern.endswith("/**") and fnmatchcase(
-            normalised, pattern + "/*"
-        ):  # pragma: no cover - belt-and-braces
+        # A LITERAL directory pattern ("build", "docs/generated/") covers the
+        # subtree beneath it, matching .gitignore intuition. Restricted to
+        # patterns with no glob characters of their own - otherwise "docs/*"
+        # would expand to "docs/*/**" and quietly become recursive again,
+        # which is the behaviour this module is fixing.
+        if any(ch in pattern for ch in "*?["):
+            continue
+        if _compile(pattern.rstrip("/") + "/**").match(normalised):
             return True
     return False

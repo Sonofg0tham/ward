@@ -68,6 +68,30 @@ esac
 echo "Ward verdict: ${VERDICT}"
 echo "Report:       ${OUTPUT}"
 
+# The whole report went to a file, so a failing run showed the maintainer a red
+# tick and nothing else. Put the findings somewhere a human actually reads.
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  {
+    echo "## Ward: ${VERDICT}"
+    echo
+    if [[ "${VERDICT}" == "pass" ]]; then
+      echo "No injection patterns detected above the \`${THRESHOLD}\` threshold."
+    else
+      echo "Scanned \`${REPO}#${PR}\` with \`--fail-on ${FAIL_ON}\`."
+      echo
+      echo "<details><summary>Report (\`${OUTPUT}\`)</summary>"
+      echo
+      echo '```'
+      # Cap it: a large SARIF document would blow the 1 MiB summary limit.
+      head -c 60000 "${OUTPUT}" 2>/dev/null || echo "(report file unreadable)"
+      echo
+      echo '```'
+      echo
+      echo "</details>"
+    fi
+  } >>"${GITHUB_STEP_SUMMARY}" || true
+fi
+
 # Fail closed. An unexpected exit code means Ward did not run to completion
 # (not installed, interpreter crash, killed), so the metadata was never
 # actually screened. Passing the job here would turn a broken security gate

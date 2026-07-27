@@ -435,15 +435,26 @@ content. Drop a `.wardignore` at the repo root with fnmatch-style globs:
 
 ```
 # .wardignore
-tests/fixtures/**/*    # adversarial by design
-security/research/*    # writeup of past attacks
-docs/threat-models/*
+tests/fixtures/**/*    # whole subtree
+security/research/*    # one level only
+docs/threat-models/    # trailing slash: whole subtree
 ```
+
+Globs are **segment-aware**, like `.gitignore`: `*` matches within a single
+path segment and `**` crosses separators. `docs/*` therefore covers
+`docs/api.md` but not `docs/internal/secret.md` — use `docs/**/*` or a
+trailing slash for the subtree. This matters because `.wardignore` is
+committed, so an attacker can read it: a pattern that silently suppressed
+more than it said would be a place to hide a payload.
 
 Filenames in ignored paths are STILL scanned (a malicious filename
 remains suspicious even inside an ignored directory). Only the content
 scan is suppressed. Ward's own repo uses this to exclude its own source
 tree from self-scanning.
+
+`.wardignore` is provenance-gated the same way `ward-allow-file` is: under
+`--suppression-base`, a `.wardignore` the current branch modified is
+ignored entirely, so a PR cannot add one and switch the scanner off.
 
 ## Suppressing rules in documentation
 

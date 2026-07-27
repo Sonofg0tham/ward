@@ -5,18 +5,27 @@ on:
     tags:
       - "v*.*.*"
 
-permissions:
-  contents: write
-  id-token: write
+# Least privilege at workflow scope, granted per job below. Previously both
+# contents:write and id-token:write applied to every job, so the build job -
+# which resolves hatchling and its whole transitive tree fresh from PyPI with
+# no pins - held a push-capable token AND could mint a PyPI OIDC token from
+# outside the protected `pypi` environment.
+permissions: {}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Nothing in this job pushes, so do not leave a credential in
+          # .git/config for the dependency tree to find.
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
@@ -26,7 +35,7 @@ jobs:
           python -m build
 
       - name: Upload distribution artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: dist
           path: dist/
@@ -38,31 +47,37 @@ jobs:
     if: vars.PYPI_READY == 'true'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      # Only the trusted-publisher exchange. No repo write of any kind.
+      id-token: write
     environment:
       name: pypi
       url: https://pypi.org/p/ward-scanner
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: dist
           path: dist
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
         with:
           packages-dir: dist
 
   github-release:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      # Creating the release needs contents:write, and nothing else.
+      contents: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: dist
           path: dist
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           files: dist/*
           generate_release_notes: true

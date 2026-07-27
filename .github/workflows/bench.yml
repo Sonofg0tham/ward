@@ -15,18 +15,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out PR HEAD
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: pr
 
       - name: Check out base ref
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           path: base
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
           cache: pip
@@ -52,7 +52,7 @@ jobs:
           cat "${{ runner.temp }}/diff.md"
 
       - name: Post / update sticky PR comment
-        uses: marocchino/sticky-pull-request-comment@v3
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3
         # Skip on forks: they do not have write permission to comment on the PR.
         if: ${{ github.event.pull_request.head.repo.fork == false }}
         with:
@@ -61,7 +61,7 @@ jobs:
 
       - name: Upload bench artefacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: bench-diff
           path: |

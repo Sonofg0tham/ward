@@ -17,15 +17,29 @@ def _load(path: str | Path) -> dict[str, Any]:
     return loaded if isinstance(loaded, dict) else {}
 
 
-def _pct(x: float) -> str:
+def _pct(x: float | None) -> str:
+    if x is None:
+        return "n/a"
     return f"{x * 100:.1f}%"
 
 
-def _delta_pp(new: float, base: float) -> str:
+def _delta_pp(new: float | None, base: float | None) -> str:
+    """Delta in percentage points, or "n/a" when either side was not measured.
+
+    Coercing a missing metric to 0 would invent a swing of the full magnitude
+    of the other side and report it as a regression or an improvement.
+    """
+    if new is None or base is None:
+        return "n/a"
     delta = (new - base) * 100
     if abs(delta) < 0.05:  # rounds to 0.0pp
         return "±0.0pp"
     return f"{delta:+.1f}pp"
+
+
+def _metric(summary: dict[str, Any], key: str) -> float | None:
+    value = summary.get(key)
+    return None if value is None else float(value)
 
 
 def render_diff(base_report: dict[str, Any], new_report: dict[str, Any]) -> str:
@@ -42,10 +56,10 @@ def render_diff(base_report: dict[str, Any], new_report: dict[str, Any]) -> str:
 
     base_summary = base_report.get("summary", {})
     new_summary = new_report.get("summary", {})
-    base_recall = float(base_summary.get("overall_recall_in_scope", 0))
-    new_recall = float(new_summary.get("overall_recall_in_scope", 0))
-    base_fpr = float(base_summary.get("overall_false_positive_rate_in_scope", 0))
-    new_fpr = float(new_summary.get("overall_false_positive_rate_in_scope", 0))
+    base_recall = _metric(base_summary, "overall_recall_in_scope")
+    new_recall = _metric(new_summary, "overall_recall_in_scope")
+    base_fpr = _metric(base_summary, "overall_false_positive_rate_in_scope")
+    new_fpr = _metric(new_summary, "overall_false_positive_rate_in_scope")
 
     lines.append("### Headline")
     lines.append("")
@@ -74,7 +88,14 @@ def render_diff(base_report: dict[str, Any], new_report: dict[str, Any]) -> str:
         lines.append(f"| `{name}` | {_pct(b)} | {_pct(n)} | {_delta_pp(n, b)} |")
     lines.append("")
 
-    if abs(new_recall - base_recall) < 0.001 and abs(new_fpr - base_fpr) < 0.001:
+    # A metric that was never measured cannot be compared. Saying so beats
+    # coercing it to 0 and reporting a swing the size of the other side.
+    if new_recall is None or base_recall is None or new_fpr is None or base_fpr is None:
+        lines.append(
+            "_Not comparable: at least one headline metric scored zero rows "
+            "in one of the two reports._"
+        )
+    elif abs(new_recall - base_recall) < 0.001 and abs(new_fpr - base_fpr) < 0.001:
         lines.append("_No change to headline detection numbers on the bundled samples._")
     elif new_recall < base_recall - 0.05:
         lines.append(

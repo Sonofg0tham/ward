@@ -8,7 +8,15 @@ from .corpora import CorpusFit
 from .runner import BenchReport, CorpusResult
 
 
-def _pct(x: float) -> str:
+def _pct(x: float | None) -> str:
+    """Format a rate, or say plainly that it was never measured.
+
+    None means the denominator was zero. Printing "0.0%" there would claim a
+    result the run did not earn - the difference matters most for the FPR,
+    which is Ward's headline number.
+    """
+    if x is None:
+        return "n/a (0 rows scored)"
     return f"{x * 100:.1f}%"
 
 

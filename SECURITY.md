@@ -19,7 +19,9 @@ Snyk's "Clinejection" issue-title attack against Cline.
   titles, PR descriptions, code comments, and Markdown content.
 - Role-manipulation tokens such as `<|im_start|>system`, fake tool-call
   syntax, and Anthropic / Cursor / Antigravity-specific role markers.
-- Obfuscation patterns: zero-width unicode, RTL override (U+202E), Unicode
+- Obfuscation patterns: invisible characters (the whole Unicode Cf
+  category plus variation selectors - zero-width spaces, SOFT HYPHEN, the
+  LRM/RLM bidi marks Trojan Source uses, RTL override U+202E), Unicode
   TAG-block smuggling (U+E0000-U+E007F, invisible to humans but readable by
   tokenisers - rule `obf.unicode_tag`), long base64 blocks in unusual
   fields, and hex-encoded payloads.
@@ -79,12 +81,29 @@ recall beyond what regex can reach:
   this in CI with `ward scan-local --suppression-base <base-ref>`,
   which only honours directives in files unchanged since the base ref.
   Directives in files the PR touched are ignored.
-- Ward fails **closed**, deliberately. A rule pack that resolves to zero
-  rules (missing `--rule-pack` directory, empty directory, unreadable
-  file) raises rather than scanning with nothing loaded, because an empty
-  pack would report PASS on every input. The GitHub Action mirrors this:
-  if `ward` exits with an unexpected code the scan is treated as not
-  having run, and the job fails rather than going green.
+- Ward fails **closed**, deliberately. Anything that would leave a scan
+  having screened nothing is an error, not a clean result:
+  - A rule pack resolving to zero rules (missing `--rule-pack` directory,
+    empty directory, duplicate ids) raises rather than scanning with
+    nothing loaded.
+  - `scan-local` outside a git working tree, or with an unreadable
+    `--repo`, exits 2 rather than reporting PASS on zero inputs.
+  - `--suppression-base` exits 2 if the change set cannot be computed.
+    A shallow clone — `actions/checkout`'s default — makes the merge-base
+    diff fail, and treating that as "nothing changed" would trust every
+    suppression directive in the PR. Use `fetch-depth: 0`.
+  - `scan-pr` turns network and non-JSON responses into exit 2, not an
+    uncaught exception (which exits 1, and the Action reads 1 as WARN).
+  - The GitHub Action treats any unexpected exit code as "the scan did not
+    complete" and fails the job rather than going green.
+- **Provenance gating covers `.wardignore` as well as `ward-allow-file`.**
+  Under `--suppression-base`, a `.wardignore` modified by the current
+  branch is not honoured at all. Without that, a PR adding a `.wardignore`
+  containing `*` disabled every content scan and still reported PASS.
+- `.wardignore` globs are segment-aware: `*` does not cross `/`. Patterns
+  used to be implicitly recursive, so `docs/*` also silenced
+  `docs/internal/anything/evil.md` — and since `.wardignore` is committed,
+  an attacker can read it and pick the deeper path.
 - Ward's tier 1 is a rule-based scanner, not a generative classifier.
   Novel zero-day injection techniques that do not match any rule pass
   through the regex tier silently until the rule pack is updated. Enable

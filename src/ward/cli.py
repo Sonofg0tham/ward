@@ -156,6 +156,17 @@ def _load_pack(rule_pack: Path | None) -> RulePack:
         raise typer.Exit(code=2) from exc
 
 
+def _rate(value: float | None) -> str:
+    """Format a benchmark rate, or say it was not measured.
+
+    None means zero rows in the denominator. "0.0%" there would report a
+    result the run never earned.
+    """
+    if value is None:
+        return "n/a (0 rows scored)"
+    return f"{value * 100:.1f}%"
+
+
 def _parse_severity(value: str, *, flag: str) -> Severity:
     try:
         return Severity(value.lower())
@@ -492,12 +503,16 @@ def judge_cmd(
         typer.Option("--threshold", help="Min confidence to treat as an injection (exit 2)."),
     ] = 0.5,
 ) -> None:
-    """Classify a single string from stdin with the optional LLM judge tier.
+    r"""Classify a single string from stdin with the optional LLM judge tier.
 
     This is the tier-2 semantic classifier: it catches injections that regex
     structurally misses (paraphrases, role-play, novel phrasings). The
-    'anthropic' engine needs the [judge] extra and ANTHROPIC_API_KEY; 'mock'
+    'anthropic' engine needs the \[judge] extra and ANTHROPIC_API_KEY; 'mock'
     is an offline keyword judge for demos and CI.
+
+    Raw docstring, and the bracket is escaped for Rich: unescaped, Rich parses
+    it as a style tag and the extra's name vanishes from --help, which is the
+    one place a user goes to find out what to install.
     """
     from .judge import JudgeError, get_judge
 
@@ -644,7 +659,7 @@ def bench(
             "--download",
             help=(
                 "Fetch the full upstream corpus into the local cache before benching. "
-                "Repeatable. Requires the [bench-download] extra for parquet corpora."
+                "Repeatable. Requires the \\[bench-download] extra for parquet corpora."
             ),
         ),
     ] = None,
@@ -654,7 +669,7 @@ def bench(
             "--judge",
             help=(
                 "Optional LLM judge tier for rows regex misses: none | mock | anthropic. "
-                "Off by default. 'anthropic' needs the [judge] extra and ANTHROPIC_API_KEY."
+                "Off by default. 'anthropic' needs the \\[judge] extra and ANTHROPIC_API_KEY."
             ),
         ),
     ] = "none",
@@ -761,8 +776,7 @@ def bench(
         target.write_text(body, encoding="utf-8")
         typer.echo(f"Wrote benchmark report: {target}")
         typer.echo(
-            f"In-scope recall: {report.overall_recall * 100:.1f}%  "
-            f"FPR: {report.overall_false_positive_rate * 100:.1f}%"
+            f"In-scope recall: {_rate(report.overall_recall)}  FPR: {_rate(report.overall_false_positive_rate)}"
         )
 
 
