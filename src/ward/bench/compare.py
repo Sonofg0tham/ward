@@ -83,32 +83,47 @@ def render_diff(base_report: dict[str, Any], new_report: dict[str, Any]) -> str:
     lines.append("|--------|------|----|-------|")
     all_names = sorted(set(base_corpora) | set(new_corpora))
     for name in all_names:
-        b = float(base_corpora.get(name, {}).get("recall", 0))
-        n = float(new_corpora.get(name, {}).get("recall", 0))
+        # A corpus present in only one report was not measured in the other.
+        # Coercing the absent side to 0 printed a fabricated full-magnitude
+        # swing (-100.0pp) for what is really a rename or an addition.
+        b = _metric(base_corpora.get(name, {}), "recall")
+        n = _metric(new_corpora.get(name, {}), "recall")
         lines.append(f"| `{name}` | {_pct(b)} | {_pct(n)} | {_delta_pp(n, b)} |")
     lines.append("")
 
-    # A metric that was never measured cannot be compared. Saying so beats
-    # coercing it to 0 and reporting a swing the size of the other side.
-    if new_recall is None or base_recall is None or new_fpr is None or base_fpr is None:
-        lines.append(
-            "_Not comparable: at least one headline metric scored zero rows "
-            "in one of the two reports._"
-        )
-    elif abs(new_recall - base_recall) < 0.001 and abs(new_fpr - base_fpr) < 0.001:
-        lines.append("_No change to headline detection numbers on the bundled samples._")
-    elif new_recall < base_recall - 0.05:
-        lines.append(
-            f"⚠️ **Recall regression**: down {_delta_pp(new_recall, base_recall)} from the base. "
-            "Investigate before merging."
-        )
-    elif new_fpr > base_fpr + 0.05:
-        lines.append(
-            f"⚠️ **False-positive regression**: up {_delta_pp(new_fpr, base_fpr)} from the base. "
-            "Investigate before merging."
-        )
-    elif new_recall > base_recall:
-        lines.append(f"✅ Recall improved by {_delta_pp(new_recall, base_recall)}.")
+    # Gate each metric on its OWN measurability. A single combined guard meant
+    # an unmeasured FPR silently swallowed the recall-regression warning - the
+    # table would print a -40.0pp recall delta and then say "not comparable",
+    # which is exactly the regression this workflow exists to shout about.
+    verdicts: list[str] = []
+    recall_known = base_recall is not None and new_recall is not None
+    fpr_known = base_fpr is not None and new_fpr is not None
+
+    if recall_known:
+        assert base_recall is not None and new_recall is not None  # narrowing
+        if new_recall < base_recall - 0.05:
+            verdicts.append(
+                f"⚠️ **Recall regression**: down {_delta_pp(new_recall, base_recall)} "
+                "from the base. Investigate before merging."
+            )
+        elif new_recall > base_recall + 0.001:
+            verdicts.append(f"✅ Recall improved by {_delta_pp(new_recall, base_recall)}.")
+    else:
+        verdicts.append("_Recall not comparable: zero in-scope rows scored in one report._")
+
+    if fpr_known:
+        assert base_fpr is not None and new_fpr is not None  # narrowing
+        if new_fpr > base_fpr + 0.05:
+            verdicts.append(
+                f"⚠️ **False-positive regression**: up {_delta_pp(new_fpr, base_fpr)} "
+                "from the base. Investigate before merging."
+            )
+    else:
+        verdicts.append("_FPR not comparable: zero benign rows scored in one report._")
+
+    if recall_known and fpr_known and len(verdicts) == 0:
+        verdicts.append("_No change to headline detection numbers on the bundled samples._")
+    lines.extend(verdicts)
     return "\n".join(lines)
 
 

@@ -52,7 +52,7 @@
   severity: high
   description: "Text impersonates a chat turn boundary the agent might trust"
   patterns:
-    - '(?m)^(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION|User|Human|Assistant|Tool|Function)[ \t]*:[ \t]*(?:.{0,400})$'
+    - '(?m)^[ \t]*(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION|User|Human|Assistant|Tool|Function)[ \t]*:[ \t]*(?:.{0,400})$'
   surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
   remediation: "Reject. Untrusted text simulating a conversation turn is an injection precursor."
 

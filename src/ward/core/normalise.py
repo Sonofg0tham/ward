@@ -248,15 +248,23 @@ def decode_unicode_tags(text: str) -> str:
     return "".join(parts)
 
 
+# Typographic apostrophes fold to ASCII so rules only ever have to spell the
+# ASCII form. macOS and iOS turn on smart quotes by default, and anything
+# pasted from Slack or Notion carries U+2019, so "Don't" and "Don’t" reach
+# Ward in roughly equal numbers. Without this fold, a rule guarding against
+# "don't forget your API key" fires on half of them.
+_APOSTROPHES = str.maketrans({"’": "'", "‘": "'", "ʼ": "'", "ʹ": "'"})
+
+
 def normalise_text(text: str) -> str:
-    """NFKC-normalise and strip invisible characters.
+    """NFKC-normalise, fold typographic apostrophes, strip invisible characters.
 
     Suitable for feeding to regex-based detectors that want to ignore visual
     obfuscation. Use ``contains_invisible`` against the raw text first if you
     want to flag the obfuscation itself.
     """
     nfkc = unicodedata.normalize("NFKC", text)
-    return strip_invisible(nfkc)
+    return strip_invisible(nfkc.translate(_APOSTROPHES))
 
 
 def contains_invisible(text: str) -> list[tuple[int, str, str]]:

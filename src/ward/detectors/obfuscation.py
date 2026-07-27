@@ -44,11 +44,13 @@ _BIDI_CONTROLS = {
     "⁧": "RIGHT-TO-LEFT ISOLATE",
     "⁨": "FIRST STRONG ISOLATE",
     "⁩": "POP DIRECTIONAL ISOLATE",
-    # The two marks Trojan Source (arXiv:2111.00169) is actually built on.
-    # Their absence here meant an LRM/RLM payload was stripped by the
-    # normaliser and then reported by nothing at all.
-    "‎": "LEFT-TO-RIGHT MARK",
-    "‏": "RIGHT-TO-LEFT MARK",
+    # U+200E LEFT-TO-RIGHT MARK and U+200F RIGHT-TO-LEFT MARK are deliberately
+    # NOT here. They are the ordinary way to keep a version number or a Latin
+    # word rendering correctly inside Arabic or Hebrew prose, so reporting them
+    # turns any legitimate RTL README into a HIGH finding and a hard FAIL.
+    # They are still stripped by normalise (is_invisible catches them as Cf),
+    # so "ig<LRM>nore all previous instructions" still fires io.ignore_previous
+    # - the payload is caught, the innocent document is not punished.
 }
 
 _ZERO_WIDTH = {
@@ -63,8 +65,10 @@ _ZERO_WIDTH = {
     "⁢": "INVISIBLE TIMES",
     "⁣": "INVISIBLE SEPARATOR",
     "⁤": "INVISIBLE PLUS",
-    "️": "VARIATION SELECTOR-16",
-    "︎": "VARIATION SELECTOR-15",
+    # VARIATION SELECTOR-15/16 are deliberately NOT here. U+FE0F is what makes
+    # an emoji render in colour, so reporting it flags "fix: retry backoff
+    # (behaviour change) ⚠️" - Ward's own commit history trips it. They are
+    # still stripped by the normaliser, so they cannot be used to split a word.
 }
 
 

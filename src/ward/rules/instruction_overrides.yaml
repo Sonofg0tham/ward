@@ -30,7 +30,7 @@
     # possessive addressed to the agent ("ignore your command")
     - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+)?(?:your|my)\s+(?:(?:previous|prior|preceding|above|earlier|original|first|last)\s+)?(?:instructions?|prompts?|context|messages?|rules?|guidelines?|system\s+prompt|text|directions?|directives?|requests?|commands?|orders?|restrictions?|constraints?|limitations?|tasks?)'
     # high-signal nouns standing alone
-    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt|directions?|commands?|orders?|rules?)\b'
+    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+)*(?:instructions?|prompts?|directives?|system\s+prompt|directions?|commands?|orders?|rules?)\b'
     - '(?i)(?:don[''’]?t|do\s+not)\s+(?:follow|obey|adhere\s+to|listen\s+to|respect)\s+(?:any\s+|all\s+|the\s+)?(?:previous|prior|above|earlier|original)?\s*(?:instructions?|prompts?|requests?|commands?|rules?|directions?)'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject the metadata. Treat the originating actor as untrusted until the change is reviewed by a human."
@@ -80,7 +80,7 @@
     # meant "print all your system instructions" slipped straight through
     # while "print your system instructions" was caught - one extra
     # determiner defeated the whole prompt-extraction rule.
-    - '(?i)\b(?:respond\s+with|return|give\s+me|tell\s+me|print|output|repeat|list|show|reveal|expose|dump)\s+(?:back\s+)?(?:me\s+|us\s+)?(?:(?:every|all|each|any)\s+(?:of\s+)?(?:your\s+|the\s+|my\s+|its\s+)?|(?:your|the|my|its)\s+)(?:initial\s+|original\s+|first\s+|last\s+|previous\s+|preceding\s+|prior\s+|system\s+|hidden\s+)?(?:instructions?|prompts?|directives?|commands?|orders?|system\s+prompt)'
+    - '(?i)\b(?:respond\s+with|return|give\s+me|tell\s+me|print|output|repeat|list|show|reveal|expose|dump)\s+(?:back\s+)?(?:me\s+|us\s+)?(?:(?:every|all|each|any)\s+(?:of\s+)?(?:your\s+|the\s+|my\s+|its\s+)?|(?:your|the|my|its)\s+)(?:initial\s+|original\s+|first\s+|last\s+|previous\s+|preceding\s+|prior\s+|system\s+|hidden\s+)?(?:instructions?|prompts?|directives?|system\s+prompt)'
     - '(?i)(?:respond\s+with|return|give\s+me|tell\s+me|print|output|repeat|list|show|reveal|expose|dump)\s+(?:everything|all)\s+(?:you|the\s+assistant)\s+(?:have\s+been\s+|were\s+|was\s+)?(?:given|told|instructed|prompted)'
     - '(?i)what\s+(?:are|were)\s+(?:your\s+|the\s+)(?:initial\s+|original\s+|previous\s+|system\s+|hidden\s+)?(?:instructions?|prompts?|directives?)'
   surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
@@ -154,7 +154,7 @@
   severity: medium
   description: "'STOP. Now do X' chained-instruction pattern"
   patterns:
-    - '(?im)^[ \t]*(?:STOP|HALT|ABORT|RESET)[ \t]*[\.\!]?$'
+    - '(?im)^[ \t]*(?:STOP|HALT|ABORT|RESET)[ \t]*(?:[\.\!](?=[ \t]|$)|$)'
     - '(?i)(?:now|then)\s+(?:proceed\s+to|do|execute|run)\s+(?:the\s+)?(?:following|this\s+)?(?:instead|new\s+task)'
   surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."

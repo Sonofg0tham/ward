@@ -44,6 +44,10 @@
     # real projects write.
     - '(?i)\b(?:jailbreak\s+mode|unrestricted\s+mode|god\s+mode)\b'
     - '(?i)\b(?:enter|enable|activate|switch\s+to|go\s+into|you\s+are\s+(?:now\s+)?in)\s+(?:developer|admin)\s+mode\b'
+    # The canonical DAN prompt puts the activation AFTER the phrase:
+    # "act as ChatGPT with Developer Mode enabled". Requiring a leading
+    # verb missed it entirely.
+    - '(?i)\b(?:developer|admin)\s+mode\s+(?:enabled|activated|turned\s+on|is\s+(?:on|enabled)|output)\b'
     - '(?i)\bdan\s+mode\b'
     - '(?i)\bdo\s+anything\s+now\b'
   surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]

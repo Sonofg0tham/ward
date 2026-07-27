@@ -1,0 +1,19 @@
+description: "Legitimate RTL prose and ordinary emoji. LRM/RLM are the normal way to keep a version number rendering correctly inside Arabic, and U+FE0F is what makes an emoji render in colour - reporting either turned innocent documents into HIGH findings and hard build failures. Ward's own commit history tripped the emoji case."
+inputs:
+  - surface: file_name
+    text: "docs/ar/README.md"
+  - surface: file_content
+    text: |
+      # دليل البدء
+
+      الإصدار ‎2.0‎ جاهز للإطلاق.
+
+      עדכון ‏1.4‏ שוחרר.
+  - surface: pr_title
+    text: "docs: add Arabic and Hebrew quickstart"
+  - surface: pr_body
+    text: |
+      Adds the translated quickstart pages. ⚠️ Breaking: the old
+      `/docs/intl` route is gone. All tests pass ✔️
+  - surface: commit_message
+    text: "feat: add retry backoff ⚠️ behaviour change"

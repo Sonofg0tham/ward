@@ -19,20 +19,22 @@ ingests before any LLM-based reviewer, SAST agent, or IaC scanner sees
 it. The job: catch prompt injection attempts embedded in the places that
 traditional security tools ignore.
 
-**Latest benchmark (v0.2.3):**
+**Latest benchmark:**
 
 - **Smoke** (bundled 50-row samples, offline): 75.2% in-scope recall,
   0.0% false-positive rate.
-- **Full corpus** (`ward bench --download`, 1,391 real rows): **53.5%
+- **Full corpus** (`ward bench --download`, 1,391 real rows): **55.2%
   in-scope recall, 0.0% false-positive rate** across Lakera, deepset,
   and Spikee. AdvBench is a deliberate ceiling test at 0%.
 - **Optional LLM judge tier** recovers semantic injections regex
   structurally misses - measure the lift with `ward bench --judge`.
 
 The 0.0% FPR on 343 benign deepset rows is the strongest signal here.
-Full reports in [`benchmark/v0.2.3-smoke.md`](benchmark/v0.2.3-smoke.md)
-and [`benchmark/v0.2.3-full.md`](benchmark/v0.2.3-full.md). Every PR gets
-its own bench-diff comment via the CI workflow.
+The numbers above are current trunk; the per-release reports under
+[`benchmark/`](benchmark/) are committed at tag time, most recently
+[`benchmark/v0.2.3-smoke.md`](benchmark/v0.2.3-smoke.md) and
+[`benchmark/v0.2.3-full.md`](benchmark/v0.2.3-full.md). Every PR gets its
+own bench-diff comment via the CI workflow.
 
 ## Why this exists
 

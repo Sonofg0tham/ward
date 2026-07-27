@@ -23,6 +23,8 @@ of rule dicts:
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -112,6 +114,24 @@ def _build_rule(raw: dict[str, object], source: str) -> Rule:
     )
 
 
+@contextmanager
+def _as_rule_pack_error(source: str) -> Iterator[None]:
+    """Funnel every load failure into RulePackError.
+
+    Only ``RulePackError`` is special-cased by the CLI into exit 2. Malformed
+    YAML, an uncompilable regex, or an unreadable file used to escape as
+    ``yaml.YAMLError`` / ``re.error`` / ``OSError`` and exit 1 - which the
+    GitHub Action reads as WARN and passes the job. A rule pack that will not
+    load is a broken gate however it failed to load.
+    """
+    try:
+        yield
+    except RulePackError:
+        raise
+    except (ValueError, yaml.YAMLError, re.error, OSError) as exc:
+        raise RulePackError(f"Could not load {source}: {exc}") from exc
+
+
 def _check_no_duplicate_ids(rules: list[Rule], source: str) -> None:
     seen: set[str] = set()
     duplicates: list[str] = []
@@ -153,19 +173,21 @@ def load_rule_pack(custom_dir: Path | None = None) -> RulePack:
         )
         if not yaml_paths:
             raise RulePackError(f"Rule pack directory contains no .yaml/.yml files: {custom_dir}")
-        for yaml_path in yaml_paths:
-            for raw in _load_yaml_file(yaml_path):
-                rules.append(_build_rule(raw, str(yaml_path)))
         source = str(custom_dir)
+        with _as_rule_pack_error(source):
+            for yaml_path in yaml_paths:
+                for raw in _load_yaml_file(yaml_path):
+                    rules.append(_build_rule(raw, str(yaml_path)))
     else:
-        package = resources.files("ward.rules")
-        for resource in sorted(package.iterdir(), key=lambda r: r.name):
-            if not resource.name.endswith(".yaml"):
-                continue
-            with resources.as_file(resource) as path:
-                for raw in _load_yaml_file(path):
-                    rules.append(_build_rule(raw, resource.name))
         source = "the bundled rule pack"
+        with _as_rule_pack_error(source):
+            package = resources.files("ward.rules")
+            for resource in sorted(package.iterdir(), key=lambda r: r.name):
+                if not resource.name.endswith(".yaml"):
+                    continue
+                with resources.as_file(resource) as path:
+                    for raw in _load_yaml_file(path):
+                        rules.append(_build_rule(raw, resource.name))
 
     if not rules:
         raise RulePackError(

@@ -67,14 +67,27 @@ def _compile(pattern: str) -> re.Pattern[str]:
                 i += 1
             else:
                 body = pattern[i + 1 : close]
-                if body.startswith("!"):
-                    body = "^" + body[1:]
-                out.append(f"[{body}]")
+                negate = body.startswith("!")
+                if negate:
+                    body = body[1:]
+                # Escape the body per character, keeping range hyphens intact.
+                # Splicing it raw let a pattern like `app/\[slug\]/**` produce
+                # `[slug\]`, whose trailing backslash swallowed the closing
+                # bracket and made the whole regex unparseable.
+                safe = "".join(c if c == "-" else re.escape(c) for c in body)
+                out.append("[" + ("^" if negate else "") + safe + "]")
                 i = close + 1
         else:
             out.append(re.escape(ch))
             i += 1
-    return re.compile(r"\A" + "".join(out) + r"\Z")
+    try:
+        return re.compile(r"\A" + "".join(out) + r"\Z")
+    except re.error:
+        # A pattern we cannot translate must not abort the scan with a
+        # traceback (exit 1 = WARN to the action, and a zero-byte report).
+        # Fall back to an exact literal match: it suppresses less than the
+        # author intended, which is the safe direction for a scanner.
+        return re.compile(r"\A" + re.escape(pattern) + r"\Z")
 
 
 def load_patterns(repo: Path) -> tuple[str, ...]:

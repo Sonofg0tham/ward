@@ -384,7 +384,12 @@ def scan_local(
     # attacker-controllable as a ward-allow-file directive and needs the same
     # provenance gate. A PR that adds a .wardignore containing "*" would
     # otherwise silence every content scan in the repo and still report PASS.
-    if suppression_base is not None and ignore_patterns and ".wardignore" in changed:
+    # Case-folded: git reports the path as committed, and on a case-insensitive
+    # filesystem (Windows, default macOS) a PR adding ".WARDIGNORE" is read by
+    # load_patterns but sailed past an exact-string gate - which handed the
+    # attacker back the exact bypass this check exists to close.
+    wardignore_changed = any(c.casefold() == ".wardignore" for c in changed)
+    if suppression_base is not None and ignore_patterns and wardignore_changed:
         typer.echo(
             ".wardignore was modified in this change; ignoring it. "
             "Path suppression must predate the branch being scanned.",

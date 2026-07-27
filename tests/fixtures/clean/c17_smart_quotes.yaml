@@ -1,0 +1,14 @@
+description: "Typographic apostrophes. macOS and iOS enable smart quotes by default and anything pasted from Slack or Notion carries U+2019, so the ASCII-only negation guard let half of these hard-fail CI."
+inputs:
+  - surface: branch_name
+    text: "chore/update-onboarding-docs"
+  - surface: pr_title
+    text: "Don’t drop the retry header on redirect"
+  - surface: pr_body
+    text: |
+      Don’t forget your API key when running the integration tests.
+
+      Don’t forget to update the CHANGELOG before tagging the release.
+      Please don’t forget your local .env file.
+  - surface: commit_message
+    text: "fix: don’t forget your credentials when re-authenticating"

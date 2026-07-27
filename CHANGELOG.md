@@ -19,13 +19,21 @@ A full-codebase audit (six parallel domain passes, each finding adversarially
 verified) produced 30 confirmed defects. Everything below came out of it or
 out of the release-readiness pass that preceded it.
 
-Headline benchmark numbers are unchanged against the v0.2.3 smoke report -
-**75.2% in-scope recall, 0.0% FPR** - so the false-positive work did not
-trade away recall. The composition did shift by one row each way: Lakera
-68.0% → 70.0% (+1 row), deepset 40.0% → 36.0% (−1 row). The rule rewrite
-tightened generic-noun matches and added the possessive phrasings
-("forget your prompt", "ignore your command") that the corpora showed were
-the real attack shape.
+The diff was then put through a second adversarial review of its own, which
+confirmed 17 further defects — most of them regressions introduced by the
+first round of fixes. Those are folded in below rather than listed
+separately, and each is now pinned by a fixture.
+
+Benchmark, current trunk vs the committed v0.2.3 reports:
+
+| | v0.2.3 | now |
+|---|---|---|
+| Smoke (50-row samples) | 75.2% recall, 0.0% FPR | 75.2% recall, 0.0% FPR |
+| Full corpus (1,391 rows) | 53.5% recall, 0.0% FPR | **55.2%** recall, 0.0% FPR |
+
+So the rule work is a net detection *gain* on the real corpora — 18 more
+injection rows caught — while removing the false positives, with the FPR
+still 0.0% across all 343 benign rows.
 
 ### Security
 
@@ -136,6 +144,33 @@ the real attack shape.
   find out what to install.
 - `bench-diff` and `lab review` crashed with `UnicodeEncodeError` on Windows
   on exactly the branches that report a regression or a compromised reviewer.
+- Typographic apostrophes (U+2019 and friends) now fold to ASCII in
+  `normalise_text`. macOS and iOS default to smart quotes, so "Don't forget
+  your API key" reached Ward in two spellings and only one was guarded.
+- Legitimate international text and emoji are no longer findings. U+200E and
+  U+200F are the normal way to keep a version number rendering correctly
+  inside Arabic or Hebrew prose, and U+FE0F is what makes an emoji render in
+  colour — Ward flagged its own commit history over the latter. Both are
+  still stripped by the normaliser, so neither can hide a payload.
+- The canonical DAN phrasing ("act as ChatGPT with **Developer Mode
+  enabled**") puts the activation after the phrase; requiring a leading verb
+  missed it.
+- An indented forged chat turn (four spaces — the markdown code-block indent)
+  bypassed `tool.pretend_chat_turn`.
+- `io.stop_and_restart` stopped matching the same-line "STOP. Now do X"
+  payload it is named for.
+- Every rule-pack load failure now exits 2, not just the ones raising
+  `RulePackError`. Malformed YAML and an uncompilable regex escaped as
+  `yaml.YAMLError` / `re.error` and exited 1, which the Action reads as WARN.
+- The `.wardignore` provenance gate is case-folded. On Windows and default
+  macOS, a PR adding `.WARDIGNORE` sailed past an exact-string check — the
+  exact bypass the gate exists to close.
+- An unparseable `.wardignore` glob no longer aborts the scan with a
+  traceback; it falls back to a literal match, which suppresses less than
+  intended rather than more.
+- `bench-diff` gates recall and FPR independently. One combined guard meant
+  an unmeasured FPR silently swallowed the recall-regression warning, and a
+  corpus present in only one report printed a fabricated ±100pp swing.
 
 ### Added
 
@@ -156,7 +191,12 @@ the real attack shape.
   false-positive cases, per the fixture-pair rule in CONTRIBUTING.md.
   `io.reveal_instructions` previously had no fixture at all, which is why
   the determiner gap survived.
-- Test suite: 255 → 373. Coverage 84% → 86%.
+- Test suite: 255 → 378. Coverage 84% → 86%.
+- Two regression tests were found to be worthless by mutation testing and
+  rewritten: one passed with its fix reverted (its payload only ever matched
+  one text form), and one passed for the wrong reason (it asserted on the
+  verdict, which the invisible character raised its own finding for, rather
+  than on the payload rule actually firing).
 - `CHANGELOG.md`, `CONTRIBUTING.md`, issue templates, and a pull request
   template.
 
