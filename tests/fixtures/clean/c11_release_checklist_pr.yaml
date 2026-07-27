@@ -1,0 +1,18 @@
+description: "Release-prep PR. 'Don't forget to' and 'remove guidelines section' both used to hard-fail CI at the default fail-on: high."
+inputs:
+  - surface: branch_name
+    text: "chore/release-prep"
+  - surface: pr_title
+    text: "Release prep: docs tidy-up"
+  - surface: pr_body
+    text: |
+      A few housekeeping items before we tag.
+
+      Don't forget to update the CHANGELOG before tagging the release.
+      Don't forget your API key when running the integration tests.
+
+      Also removes the duplicated guidelines section from the docs.
+  - surface: commit_message
+    text: "refactor: remove guidelines section from docs"
+  - surface: file_name
+    text: "CHANGELOG.md"

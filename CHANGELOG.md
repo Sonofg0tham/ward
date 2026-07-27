@@ -140,6 +140,17 @@ false-positive work traded away recall.
   directory of `.yml` rules previously loaded as an empty pack, silently.
 - `tests/test_rules.py` - direct coverage for the rule loader, which had
   none. Fetch-path coverage for `github_api` via `httpx.MockTransport`.
+- `tests/test_fail_closed.py` - a regression test per audit finding, each
+  encoding a case that previously reported clean.
+- `tests/test_packaging.py` - asserts the rule YAMLs, bench samples and
+  `py.typed` really ship, and that every declared runtime dependency is
+  actually imported.
+- Four attack fixtures (leetspeak and repeat-letter branch names, stacked
+  determiners, SOFT HYPHEN) and four clean fixtures covering the
+  false-positive cases, per the fixture-pair rule in CONTRIBUTING.md.
+  `io.reveal_instructions` previously had no fixture at all, which is why
+  the determiner gap survived.
+- Test suite: 255 → 373. Coverage 84% → 86%.
 - `CHANGELOG.md`, `CONTRIBUTING.md`, issue templates, and a pull request
   template.
 

@@ -1,0 +1,25 @@
+description: "A README documenting local setup with a docker-compose block. The indented 'user:' key matched the forged-chat-turn rule, failing the build on a benign docs file."
+inputs:
+  - surface: file_name
+    text: "docs/local-setup.md"
+  - surface: file_content
+    text: |
+      # Local setup
+
+      Bring the stack up with:
+
+      ```yaml
+      services:
+        db:
+          image: postgres:16
+          user: postgres
+          environment:
+            POSTGRES_PASSWORD: devonly
+        worker:
+          command: ["python", "-m", "worker"]
+          user: app
+      ```
+
+      Then run the migrations.
+  - surface: commit_message
+    text: "docs: document the local compose stack"
