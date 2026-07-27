@@ -191,7 +191,12 @@ still 0.0% across all 343 benign rows.
   false-positive cases, per the fixture-pair rule in CONTRIBUTING.md.
   `io.reveal_instructions` previously had no fixture at all, which is why
   the determiner gap survived.
-- Test suite: 255 → 378. Coverage 84% → 86%.
+- `tests/test_detection_matrix.py` - 88 cases in one place: every attack
+  either audit proved, every false positive either audit proved, and 37
+  freshly-written benign strings no fixture had seen. The published 0.0% FPR
+  is measured on a corpus of mostly German prose, so it never exercised the
+  English CLI and product vocabulary that actually broke real builds.
+- Test suite: 255 → 466. Coverage 84% → 86%.
 - Two regression tests were found to be worthless by mutation testing and
   rewritten: one passed with its fix reverted (its payload only ever matched
   one text form), and one passed for the wrong reason (it asserted on the
