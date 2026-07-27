@@ -1,0 +1,71 @@
+name: Bug report
+description: Ward crashed, produced a wrong verdict, or behaved unexpectedly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Do **not** use this form for a security vulnerability in Ward itself.
+        Report those privately via
+        [GitHub Security Advisories](https://github.com/Sonofg0tham/ward/security/advisories/new).
+
+
+        If Ward failed to catch an injection, or flagged something benign,
+        please use the "Missed detection or false positive" form instead - it
+        asks for the things needed to turn the report into a fixture.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what did you get instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        The exact command, and the input if it is safe to share. Please paste
+        text rather than a screenshot so it can be copied into a test.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Ward version
+      description: Output of `ward version`.
+      placeholder: "0.2.3"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: How are you running Ward?
+      multiple: true
+      options:
+        - CLI
+        - GitHub Action
+        - pre-commit hook
+        - Python SDK (import ward)
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS and Python version
+      placeholder: "Ubuntu 24.04, Python 3.12"
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output or traceback
+      description: Full output, including any traceback.
+      render: shell
