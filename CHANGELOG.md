@@ -17,9 +17,15 @@ is the downloaded upstream corpora.
 
 A full-codebase audit (six parallel domain passes, each finding adversarially
 verified) produced 30 confirmed defects. Everything below came out of it or
-out of the release-readiness pass that preceded it. Benchmark numbers are
-unchanged at **75.2% in-scope recall / 0.0% FPR**, so none of the
-false-positive work traded away recall.
+out of the release-readiness pass that preceded it.
+
+Headline benchmark numbers are unchanged against the v0.2.3 smoke report -
+**75.2% in-scope recall, 0.0% FPR** - so the false-positive work did not
+trade away recall. The composition did shift by one row each way: Lakera
+68.0% → 70.0% (+1 row), deepset 40.0% → 36.0% (−1 row). The rule rewrite
+tightened generic-noun matches and added the possessive phrasings
+("forget your prompt", "ignore your command") that the corpora showed were
+the real attack shape.
 
 ### Security
 
