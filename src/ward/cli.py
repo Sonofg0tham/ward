@@ -33,7 +33,7 @@ from .core.git_metadata import (
 )
 from .core.github_api import GitHubError, fetch_pr_metadata, parse_pr_ref
 from .core.models import ScanInput, ScanReport, Severity, Surface
-from .core.rules import RulePack, load_rule_pack
+from .core.rules import RulePack, RulePackError, load_rule_pack
 from .core.wardignore import is_ignored, load_patterns
 from .reporters import render_json, render_pretty, render_sarif
 
@@ -86,6 +86,21 @@ RulePackOption = Annotated[
 ]
 
 
+def _load_pack(rule_pack: Path | None) -> RulePack:
+    """Load a rule pack, turning a load failure into a clean exit-2.
+
+    Every command routes through this rather than calling ``load_rule_pack``
+    directly. An unhandled ``RulePackError`` would exit 1, which the GitHub
+    Action reads as WARN - a broken rule pack must never look like a soft
+    pass.
+    """
+    try:
+        return load_rule_pack(rule_pack)
+    except RulePackError as exc:
+        typer.echo(f"Rule pack error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+
 def _parse_severity(value: str, *, flag: str) -> Severity:
     try:
         return Severity(value.lower())
@@ -121,7 +136,7 @@ def _run(
     fail_on: str,
     rule_pack: Path | None,
 ) -> int:
-    pack: RulePack = load_rule_pack(rule_pack)
+    pack: RulePack = _load_pack(rule_pack)
     sev_threshold = _parse_severity(threshold, flag="--severity-threshold")
     sev_fail = _parse_severity(fail_on, flag="--fail-on")
     report = scan_inputs(
@@ -440,7 +455,7 @@ def explain(
     rule_pack: RulePackOption = None,
 ) -> None:
     """Print a plain-English explanation of a rule."""
-    pack = load_rule_pack(rule_pack)
+    pack = _load_pack(rule_pack)
     rule = pack.by_id(rule_id)
     if rule is None:
         # Heuristic rules live in code rather than YAML.
@@ -472,13 +487,20 @@ def explain(
 def update_rules() -> None:
     """Pull the latest community rule pack.
 
-    In v0.1 the rule pack ships inside the wheel. This command exists so the
-    interface is stable for v0.2, but currently it only prints a hint.
+    Rules currently ship inside the wheel, so there is nothing to fetch. The
+    command exists to keep the interface stable for when out-of-band rule
+    distribution lands; for now it points at the two ways to change rules today.
     """
     typer.echo(
-        "Ward 0.1 ships rules inside the wheel. To update, upgrade Ward itself:\n"
-        "  pipx upgrade ward-scanner\n\n"
-        "Community rule-pack distribution will land in 0.2."
+        f"Ward {__version__} ships its rule pack inside the wheel, so there is "
+        "nothing to download.\n\n"
+        "To pick up new bundled rules, upgrade Ward:\n"
+        "  pipx upgrade ward-scanner        # or: pip install -U ward-scanner\n\n"
+        "To run your own rules alongside a pinned Ward, point any scan command "
+        "at a directory\nof .yaml/.yml rule files:\n"
+        "  ward scan-local --rule-pack ./security/ward-rules\n\n"
+        "Out-of-band community rule-pack distribution is not implemented yet - "
+        "track it at\n  https://github.com/sonofg0tham/ward/issues"
     )
 
 
@@ -595,7 +617,7 @@ def bench(
             raise typer.Exit(code=2)
         selected = [c for c in CORPORA if c.name in set(corpus)]
 
-    pack = load_rule_pack(rule_pack)
+    pack = _load_pack(rule_pack)
     sev_fail = _parse_severity(fail_on, flag="--fail-on")
 
     judge = None
@@ -706,7 +728,7 @@ def attack_demo(
             typer.echo("Run 'ward attack-demo --list' to see available scenarios.", err=True)
             raise typer.Exit(code=2)
 
-    pack = load_rule_pack(rule_pack)
+    pack = _load_pack(rule_pack)
     console = Console()
     overall_caught = 0
     overall_total = 0
@@ -795,7 +817,7 @@ def selftest(
     """
     from .selftest import CATEGORIES, SCENARIOS  # local import to keep startup snappy
 
-    pack = load_rule_pack(rule_pack)
+    pack = _load_pack(rule_pack)
     console = Console()
 
     table = Table(
@@ -916,7 +938,7 @@ def lab_review(
         )
         agent = get_reviewer("naive")
 
-    pack = load_rule_pack(rule_pack)
+    pack = _load_pack(rule_pack)
     sev_fail = _parse_severity(fail_on, flag="--fail-on")
     report = run_review_lab(DEMOS, agent, pack, fail_on=sev_fail)
     body = render_markdown(report)
@@ -961,7 +983,7 @@ def lab_attack(
     """
     from .lab import render_markdown, run_default_lab  # local import for snappy startup
 
-    pack = load_rule_pack(rule_pack)
+    pack = _load_pack(rule_pack)
     sev_fail = _parse_severity(fail_on, flag="--fail-on")
     report = run_default_lab(pack)
     # Re-render fail-on into the report (run_default_lab uses HIGH; respect the CLI choice).

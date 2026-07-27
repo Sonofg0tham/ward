@@ -12,12 +12,20 @@ limit.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
 GITHUB_API = "https://api.github.com"
+
+# Owner and repo are interpolated straight into the API path, so they are
+# validated against GitHub's own naming rules before they get there. Without
+# this, a ref like "a/../../evil#1" resolves to a completely different
+# endpoint once the URL is normalised - with the caller's token attached.
+_OWNER_RE = re.compile(r"\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\Z")
+_REPO_RE = re.compile(r"\A[A-Za-z0-9_.-]{1,100}\Z")
 
 
 @dataclass(frozen=True)
@@ -96,15 +104,31 @@ def fetch_pr_metadata(owner: str, repo: str, number: int) -> PRMetadata:
 
 
 def parse_pr_ref(ref: str) -> tuple[str, str, int]:
-    """Parse ``owner/repo#123`` into its parts. Raises ``ValueError`` on bad input."""
+    """Parse ``owner/repo#123`` into its parts. Raises ``ValueError`` on bad input.
+
+    Owner, repo and number are validated here rather than at the request, so
+    nothing that could escape its path segment ever reaches the API URL.
+    """
     if "#" not in ref or "/" not in ref:
         raise ValueError(f"Bad PR ref {ref!r}, expected 'owner/repo#NUMBER'")
     repo_part, num_part = ref.split("#", 1)
     if "/" not in repo_part:
         raise ValueError(f"Bad PR ref {ref!r}, expected 'owner/repo#NUMBER'")
     owner, repo = repo_part.split("/", 1)
+    if not _OWNER_RE.match(owner):
+        raise ValueError(
+            f"Bad owner {owner!r} in PR ref {ref!r}: must be 1-39 alphanumeric "
+            "characters or hyphens, not starting or ending with a hyphen."
+        )
+    if not _REPO_RE.match(repo) or repo in (".", ".."):
+        raise ValueError(
+            f"Bad repo {repo!r} in PR ref {ref!r}: must contain only letters, "
+            "digits, '.', '-' or '_'."
+        )
     try:
         number = int(num_part)
     except ValueError as exc:
         raise ValueError(f"Bad PR number in {ref!r}") from exc
+    if number <= 0:
+        raise ValueError(f"Bad PR number in {ref!r}: must be a positive integer")
     return owner, repo, number

@@ -68,6 +68,15 @@ esac
 echo "Ward verdict: ${VERDICT}"
 echo "Report:       ${OUTPUT}"
 
+# Fail closed. An unexpected exit code means Ward did not run to completion
+# (not installed, interpreter crash, killed), so the metadata was never
+# actually screened. Passing the job here would turn a broken security gate
+# into a green tick, which is the one outcome worse than a noisy failure.
+if [[ "${VERDICT}" == "error" ]]; then
+  echo "::error::Ward exited with unexpected code ${EXIT_CODE} - the scan did not complete. Failing closed."
+  exit "${EXIT_CODE}"
+fi
+
 if [[ "${VERDICT}" == "fail" ]]; then
   exit 1
 fi

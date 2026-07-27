@@ -19,8 +19,10 @@ Snyk's "Clinejection" issue-title attack against Cline.
   titles, PR descriptions, code comments, and Markdown content.
 - Role-manipulation tokens such as `<|im_start|>system`, fake tool-call
   syntax, and Anthropic / Cursor / Antigravity-specific role markers.
-- Obfuscation patterns: zero-width unicode, RTL override (U+202E), long
-  base64 blocks in unusual fields, and hex-encoded payloads.
+- Obfuscation patterns: zero-width unicode, RTL override (U+202E), Unicode
+  TAG-block smuggling (U+E0000-U+E007F, invisible to humans but readable by
+  tokenisers - rule `obf.unicode_tag`), long base64 blocks in unusual
+  fields, and hex-encoded payloads.
 - Tool-call injection: fake JSON tool-call objects and MCP-style URIs in
   free-form text.
 - Exfiltration prompts that instruct an agent to POST data to a URL or
@@ -63,8 +65,6 @@ recall beyond what regex can reach:
   `i-g-n-o-r-e`) ARE handled.
 - **ASCII art payloads** and **Caesar / ROT ciphers.** Documented bypass
   channels from arXiv:2308.06463. Not in the current normaliser.
-- **Unicode TAG block** (U+E0000 to U+E007F). Invisible to humans,
-  readable by tokenisers. Documented evasion path. Not yet detected.
 - **Multimodal payloads.** Text embedded in images (PNG/JPG). Ward is
   text-only.
 - **Indirect injection through retrieved content** (RAG vector stores,
@@ -79,6 +79,12 @@ recall beyond what regex can reach:
   this in CI with `ward scan-local --suppression-base <base-ref>`,
   which only honours directives in files unchanged since the base ref.
   Directives in files the PR touched are ignored.
+- Ward fails **closed**, deliberately. A rule pack that resolves to zero
+  rules (missing `--rule-pack` directory, empty directory, unreadable
+  file) raises rather than scanning with nothing loaded, because an empty
+  pack would report PASS on every input. The GitHub Action mirrors this:
+  if `ward` exits with an unexpected code the scan is treated as not
+  having run, and the job fails rather than going green.
 - Ward's tier 1 is a rule-based scanner, not a generative classifier.
   Novel zero-day injection techniques that do not match any rule pass
   through the regex tier silently until the rule pack is updated. Enable
@@ -122,8 +128,8 @@ Ward is pre-1.0. Only the latest minor version receives security fixes.
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes       |
-| < 0.1   | No        |
+| 0.2.x   | Yes       |
+| < 0.2   | No        |
 
 ## Telemetry
 

@@ -417,8 +417,15 @@ Drop a directory of YAML files alongside your repo and point Ward at it:
 ward scan-local --rule-pack ./security/ward-rules
 ```
 
-Each YAML file is a list of rules. Schema is documented in
+Each `.yaml` or `.yml` file is a list of rules. Schema is documented in
 [`src/ward/rules/instruction_overrides.yaml`](src/ward/rules/instruction_overrides.yaml).
+
+Rule packs **fail closed**. If the directory is missing, holds no rule
+files, or resolves to zero rules, Ward exits 2 with an error rather than
+scanning with nothing loaded. A typo in a `--rule-pack` path is a broken
+gate, not a clean run, so it is never allowed to report PASS. Duplicate
+rule ids are rejected for the same reason: `ward explain` and suppression
+directives both resolve by id.
 
 ## Ignoring whole paths with `.wardignore`
 
@@ -536,7 +543,12 @@ pip install -e ".[dev]"
 pytest
 ```
 
-Coverage target is 75% and current trunk runs at 83%.
+Coverage target is 75% and current trunk runs at 86%.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the four CI gates, the conventions
+that trip people up (the deliberate homoglyph lint ignores, in particular),
+and the fixture-pair rule every new detection rule has to follow. Release
+history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 

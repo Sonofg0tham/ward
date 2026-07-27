@@ -33,6 +33,14 @@ import yaml
 from .models import Severity, Surface
 
 
+class RulePackError(ValueError):
+    """Raised when a rule pack cannot be loaded or would load empty.
+
+    Subclasses ``ValueError`` so existing callers that catch ``ValueError``
+    around rule parsing keep working.
+    """
+
+
 @dataclass(frozen=True)
 class Rule:
     id: str
@@ -104,13 +112,51 @@ def _build_rule(raw: dict[str, object], source: str) -> Rule:
     )
 
 
+def _check_no_duplicate_ids(rules: list[Rule], source: str) -> None:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for rule in rules:
+        if rule.id in seen and rule.id not in duplicates:
+            duplicates.append(rule.id)
+        seen.add(rule.id)
+    if duplicates:
+        raise RulePackError(
+            f"Duplicate rule id(s) in {source}: {', '.join(sorted(duplicates))}. "
+            "Rule ids must be unique - `ward explain <id>` and suppression "
+            "directives both resolve by id."
+        )
+
+
 def load_rule_pack(custom_dir: Path | None = None) -> RulePack:
-    """Load all rule YAML files from the bundled pack or a custom directory."""
+    """Load all rule YAML files from the bundled pack or a custom directory.
+
+    A rule pack that loads zero rules is always an error, never a silent
+    empty pack. Ward is a security gate: scanning with no rules would report
+    PASS on everything, so a mistyped ``--rule-pack`` path has to be loud.
+
+    Raises:
+        RulePackError: if ``custom_dir`` is missing, is not a directory,
+            holds no rule files, contains duplicate rule ids, or the pack
+            otherwise resolves to zero rules.
+    """
     rules: list[Rule] = []
     if custom_dir is not None:
-        for yaml_path in sorted(custom_dir.glob("*.yaml")):
+        if not custom_dir.exists():
+            raise RulePackError(f"Rule pack directory does not exist: {custom_dir}")
+        if not custom_dir.is_dir():
+            raise RulePackError(f"Rule pack path is not a directory: {custom_dir}")
+        # Accept .yml as well as .yaml - silently ignoring a directory of
+        # .yml rules was the same fail-open trap as a missing directory.
+        yaml_paths = sorted(
+            (p for p in custom_dir.iterdir() if p.suffix in (".yaml", ".yml")),
+            key=lambda p: p.name,
+        )
+        if not yaml_paths:
+            raise RulePackError(f"Rule pack directory contains no .yaml/.yml files: {custom_dir}")
+        for yaml_path in yaml_paths:
             for raw in _load_yaml_file(yaml_path):
                 rules.append(_build_rule(raw, str(yaml_path)))
+        source = str(custom_dir)
     else:
         package = resources.files("ward.rules")
         for resource in sorted(package.iterdir(), key=lambda r: r.name):
@@ -119,4 +165,12 @@ def load_rule_pack(custom_dir: Path | None = None) -> RulePack:
             with resources.as_file(resource) as path:
                 for raw in _load_yaml_file(path):
                     rules.append(_build_rule(raw, resource.name))
+        source = "the bundled rule pack"
+
+    if not rules:
+        raise RulePackError(
+            f"No rules loaded from {source}. Refusing to scan with an empty rule "
+            "pack - every input would report PASS."
+        )
+    _check_no_duplicate_ids(rules, source)
     return RulePack(rules=tuple(rules))
