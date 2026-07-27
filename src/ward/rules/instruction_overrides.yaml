@@ -30,7 +30,12 @@
     # possessive addressed to the agent ("ignore your command")
     - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+)?(?:your|my)\s+(?:(?:previous|prior|preceding|above|earlier|original|first|last)\s+)?(?:instructions?|prompts?|context|messages?|rules?|guidelines?|system\s+prompt|text|directions?|directives?|requests?|commands?|orders?|restrictions?|constraints?|limitations?|tasks?)'
     # high-signal nouns standing alone
-    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+)*(?:instructions?|prompts?|directives?|system\s+prompt|directions?|commands?|orders?|rules?)\b'
+    # High-signal nouns take a demonstrative: "Ignore those instructions"
+    # is an injection in anyone's book.
+    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
+    # Ambiguous nouns do not: "the linter is configured to ignore these
+    # rules inside generated/" is a sentence real projects write.
+    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+)*(?:directions?|commands?|orders?|rules?)\b'
     - '(?i)(?:don[''’]?t|do\s+not)\s+(?:follow|obey|adhere\s+to|listen\s+to|respect)\s+(?:any\s+|all\s+|the\s+)?(?:previous|prior|above|earlier|original)?\s*(?:instructions?|prompts?|requests?|commands?|rules?|directions?)'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject the metadata. Treat the originating actor as untrusted until the change is reviewed by a human."

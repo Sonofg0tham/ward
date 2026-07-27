@@ -29,9 +29,9 @@ Benchmark, current trunk vs the committed v0.2.3 reports:
 | | v0.2.3 | now |
 |---|---|---|
 | Smoke (50-row samples) | 75.2% recall, 0.0% FPR | 75.2% recall, 0.0% FPR |
-| Full corpus (1,391 rows) | 53.5% recall, 0.0% FPR | **55.2%** recall, 0.0% FPR |
+| Full corpus (1,391 rows) | 53.5% recall, 0.0% FPR | **55.5%** recall, 0.0% FPR |
 
-So the rule work is a net detection *gain* on the real corpora — 18 more
+So the rule work is a net detection *gain* on the real corpora — 21 more
 injection rows caught — while removing the false positives, with the FPR
 still 0.0% across all 343 benign rows.
 
