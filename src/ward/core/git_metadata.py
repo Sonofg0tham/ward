@@ -47,23 +47,77 @@ class GitContext:
     tags: tuple[str, ...] = ()
 
 
-def _run_git(args: list[str], cwd: Path) -> str:
-    # Force UTF-8 decoding. git emits UTF-8; without this, Windows would use
-    # the locale codepage (cp1252) and crash on any non-cp1252 byte - which
-    # is exactly the adversarial unicode Ward exists to scan. errors="replace"
-    # keeps a stray byte from taking the whole scan down.
-    result = subprocess.run(
-        ["git", *args],
-        cwd=cwd,
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+class GitError(RuntimeError):
+    """A git command Ward depends on could not be run or failed.
+
+    Distinguishing "git said no" from "git returned nothing" matters: several
+    callers previously read a failure as an empty result, which silently
+    downgraded a broken scan into a clean one.
+    """
+
+
+def _git(args: list[str], cwd: Path, *, check: bool = False) -> str:
+    """Run git and return raw stdout.
+
+    ``core.quotePath=false`` stops git octal-escaping non-ASCII paths and
+    wrapping them in quotes. With the default on, a tracked file named
+    ``réadme.md`` comes back as ``"r\\303\\251adme.md"``, whose suffix is
+    ``.md"`` - so it matches no known extension and its content is never
+    scanned at all.
+
+    Force UTF-8 decoding. git emits UTF-8; without this, Windows would use the
+    locale codepage (cp1252) and crash on any non-cp1252 byte - which is
+    exactly the adversarial unicode Ward exists to scan. errors="replace"
+    keeps a stray byte from taking the whole scan down.
+
+    With ``check=True`` a non-zero exit raises :class:`GitError` instead of
+    returning "". Use it wherever an empty result would be indistinguishable
+    from a successful scan of nothing.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-c", "core.quotePath=false", *args],
+            cwd=cwd,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError as exc:
+        # git missing from PATH, or cwd is not a usable directory. Both are
+        # operational failures, never "the repo is clean".
+        raise GitError(f"could not run git in {cwd}: {exc}") from exc
     if result.returncode != 0:
+        if check:
+            detail = (result.stderr or "").strip() or f"exit {result.returncode}"
+            raise GitError(f"git {' '.join(args)} failed: {detail}")
         return ""
-    return result.stdout.strip()
+    return result.stdout
+
+
+def _run_git(args: list[str], cwd: Path) -> str:
+    return _git(args, cwd).strip()
+
+
+def _git_paths(args: list[str], cwd: Path, *, check: bool = False) -> list[str]:
+    """Run a path-listing git command with -z and split on NUL.
+
+    NUL separation is the only encoding-safe way to read paths from git: a
+    filename may legitimately contain a newline, a quote, or leading and
+    trailing whitespace, all of which line-splitting plus ``.strip()`` would
+    mangle into a path that never matches the file on disk.
+    """
+    out = _git([*args, "-z"], cwd, check=check)
+    return [part for part in out.split("\0") if part]
+
+
+def is_git_repo(cwd: Path) -> bool:
+    """Return True if ``cwd`` sits inside a git working tree."""
+    try:
+        return bool(_git(["rev-parse", "--git-dir"], cwd).strip())
+    except GitError:
+        return False
 
 
 def current_branch(cwd: Path) -> str | None:
@@ -105,15 +159,18 @@ def commit_message(cwd: Path, sha: str) -> str:
 
 def ref_exists(cwd: Path, ref: str) -> bool:
     """Return True if ``ref`` resolves to a commit in ``cwd``."""
-    result = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
-        cwd=cwd,
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+            cwd=cwd,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError as exc:
+        raise GitError(f"could not run git in {cwd}: {exc}") from exc
     return result.returncode == 0
 
 
@@ -130,6 +187,15 @@ def changed_files(cwd: Path, base_ref: str) -> set[str]:
     any file returned here is attacker-controllable in the current change and
     must not be honoured. Assumes the caller has already verified ``base_ref``
     with :func:`ref_exists`.
+
+    Raises:
+        GitError: if any of the three commands fails. This must never degrade
+            to an empty set. A shallow clone - which is what
+            ``actions/checkout`` produces by default - makes
+            ``diff base...HEAD`` fail with "no merge base"; treating that as
+            "nothing changed" would mean every suppression directive in the
+            PR is trusted, turning ``--suppression-base`` into full trust
+            precisely when it is most needed.
     """
     files: set[str] = set()
     for args in (
@@ -137,17 +203,11 @@ def changed_files(cwd: Path, base_ref: str) -> set[str]:
         ["diff", "--name-only", "HEAD"],
         ["ls-files", "--others", "--exclude-standard"],
     ):
-        for line in _run_git(args, cwd).splitlines():
-            line = line.strip()
-            if line:
-                files.add(line.replace("\\", "/"))
+        for path in _git_paths(args, cwd, check=True):
+            files.add(path.replace("\\", "/"))
     return files
 
 
 def walk_tracked_files(cwd: Path) -> Iterable[Path]:
-    out = _run_git(["ls-files"], cwd)
-    for line in out.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        yield cwd / line
+    for path in _git_paths(["ls-files"], cwd):
+        yield cwd / path

@@ -63,10 +63,24 @@ def _headers() -> dict[str, str]:
 
 
 def _get(client: httpx.Client, path: str) -> Any:
-    response = client.get(f"{GITHUB_API}{path}")
+    """GET a GitHub API path, raising GitHubError for anything that goes wrong.
+
+    Every failure mode has to funnel into GitHubError. The CLI turns that into
+    exit 2; an uncaught httpx or JSON exception would exit 1, which the GitHub
+    Action reads as WARN and passes the job - a green tick on a PR nothing
+    ever screened.
+    """
+    try:
+        response = client.get(f"{GITHUB_API}{path}")
+    except httpx.HTTPError as exc:
+        raise GitHubError(f"request to GitHub failed for {path}: {exc}") from exc
     if response.status_code // 100 != 2:
         raise GitHubError(f"GET {path} -> {response.status_code}: {response.text}")
-    return response.json()
+    try:
+        return response.json()
+    except ValueError as exc:
+        # A proxy or captive portal can return 200 with an HTML body.
+        raise GitHubError(f"GitHub returned a non-JSON response for {path}: {exc}") from exc
 
 
 def fetch_pr_metadata(owner: str, repo: str, number: int) -> PRMetadata:

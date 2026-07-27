@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 
 from ..core.models import Finding, ScanInput
@@ -62,25 +63,35 @@ class RuleBasedDetector(Detector):
         for rule in self._rules:
             if not rule.applies_to(source.surface):
                 continue
+            # One hit per rule per surface is enough. The search has to break
+            # out of BOTH loops to achieve that: a payload that survives
+            # normalisation, decoding and several evasion transforms matches in
+            # each of those forms, and reporting it once per form inflates the
+            # summary count and the SARIF result list a reviewer has to triage.
+            hit: tuple[str, re.Match[str]] | None = None
             for text in self._texts_for(source):
                 for pattern in rule.patterns:
                     match = pattern.search(text)
-                    if match is None:
-                        continue
-                    findings.append(
-                        Finding(
-                            rule_id=rule.id,
-                            detector=self.name,
-                            category=rule.category,
-                            severity=rule.severity,
-                            message=rule.description,
-                            surface=source.surface,
-                            location=source.location,
-                            evidence=truncate_evidence(text, match.span()),
-                            remediation=rule.remediation,
-                            references=rule.references,
-                        )
-                    )
-                    # One hit per rule per surface is enough.
+                    if match is not None:
+                        hit = (text, match)
+                        break
+                if hit is not None:
                     break
+            if hit is None:
+                continue
+            matched_text, matched = hit
+            findings.append(
+                Finding(
+                    rule_id=rule.id,
+                    detector=self.name,
+                    category=rule.category,
+                    severity=rule.severity,
+                    message=rule.description,
+                    surface=source.surface,
+                    location=source.location,
+                    evidence=truncate_evidence(matched_text, matched.span()),
+                    remediation=rule.remediation,
+                    references=rule.references,
+                )
+            )
         return findings

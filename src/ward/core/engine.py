@@ -61,23 +61,50 @@ def build_input(
     if text is None:
         text = ""
     normalised = normalise_text(text)
-    decoded = list(decode_candidates(text))
+    decoded: list[str] = []
+
+    def _add(form: str) -> None:
+        if form and form != normalised and form not in decoded:
+            decoded.append(form)
+
+    for form in decode_candidates(text):
+        _add(form)
+    # Also decode the NORMALISED text. A single zero-width character dropped
+    # inside a base64 or hex blob makes the raw text undecodable, so scanning
+    # only the raw form meant one invisible character was enough to stop the
+    # payload ever being decoded and rescanned.
+    if normalised != text:
+        for form in decode_candidates(normalised):
+            _add(form)
+
+    # Text forms the evasion transforms should be applied to. Identifier
+    # surfaces get both, because git forbids spaces in ref names: any
+    # multi-word instruction in a branch, tag or file name MUST use
+    # delimiters, so delimiter-splitting and leetspeak/repeat-letter evasion
+    # are the natural combination on Ward's flagship surface. Running the
+    # evasion transforms over the normalised text alone left
+    # "1gn0r3-4ll-pr3v10us-1nstruct10ns" undetected: splitting leaves it leet,
+    # and de-leeting leaves it hyphenated, so neither product matched.
+    evasion_bases = [normalised]
     if surface in _IDENTIFIER_SURFACES:
         identifier_form = split_identifier(normalised)
         if identifier_form != normalised:
-            decoded.append(identifier_form)
+            _add(identifier_form)
+            evasion_bases.append(identifier_form)
+
     # Unicode TAG-block decode runs on the RAW text (normalise strips those
     # chars). Any TAG-smuggled instruction reappears as visible ASCII so the
     # standard rules match against it.
     tag_decoded = decode_unicode_tags(text)
-    if tag_decoded != text and tag_decoded != normalised:
-        decoded.append(tag_decoded)
+    if tag_decoded != text:
+        _add(tag_decoded)
+
     # Evasion-resistant forms: leetspeak, character-spacing, repeat-letter.
-    # Run rules against the normalised text in each form so we catch
-    # "1gn0r3 pr3v10us", "i g n o r e", and "ignooooore".
-    for form in evasion_forms(normalised):
-        if form not in decoded and form != normalised:
-            decoded.append(form)
+    # Run rules against each base form so we catch "1gn0r3 pr3v10us",
+    # "i g n o r e", and "ignooooore".
+    for base in evasion_bases:
+        for form in evasion_forms(base):
+            _add(form)
     suppressed: frozenset[str] = frozenset()
     if trust_suppressions and surface in _SUPPRESSION_SURFACES:
         suppressed = extract_suppressions(text)

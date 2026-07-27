@@ -24,7 +24,12 @@
   description: |
     Pipe the commit message under composition through Ward. Designed for
     use with `stages: [commit-msg]`.
-  entry: bash -c 'cat "$1" | ward scan-stdin --surface commit_message --fail-on high'
+  # The trailing `--` fills bash's $0 slot, so the filename pre-commit appends
+  # lands in $1. Without it the name goes to $0, `$1` is empty, ward reads an
+  # empty stdin and exits 0 - the hook silently passes every commit message,
+  # including a critical payload. An unreadable file is a hard error for the
+  # same reason: a gate that cannot read its input must not report success.
+  entry: bash -c 'test -r "$1" || { echo "ward cannot read the commit-message file" >&2; exit 2; }; ward scan-stdin --surface commit_message --fail-on high < "$1"' --
   language: python
   pass_filenames: true
   stages: [commit-msg]

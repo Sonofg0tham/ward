@@ -7,6 +7,7 @@ records, and hands them off.
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -22,10 +23,12 @@ from .core.engine import build_input, scan_inputs
 from .core.git_metadata import (
     CODE_SUFFIXES,
     DOC_SUFFIXES,
+    GitError,
     changed_files,
     commit_message,
     current_branch,
     head_sha,
+    is_git_repo,
     recent_commits,
     ref_exists,
     tag_names,
@@ -84,6 +87,58 @@ RulePackOption = Annotated[
         help="Custom rule pack directory. Defaults to the bundled rules.",
     ),
 ]
+
+
+def _force_utf8_stdio() -> None:
+    """Pin stdin/stdout/stderr to UTF-8 regardless of the console code page.
+
+    Ward's whole job is non-ASCII payloads - homoglyphs, RTL overrides,
+    zero-width and TAG-block characters. On Windows the default console codec
+    is cp1252, which breaks Ward in both directions:
+
+    * reading, a UTF-8 payload piped into ``scan-stdin`` arrives as mojibake
+      that no homoglyph or invisible-character check can see, so the scan
+      reports PASS on an injection;
+    * writing, rendering a finding whose evidence holds the payload raises
+      UnicodeEncodeError, which exits 1 (WARN to the action) and leaves a
+      zero-byte report - detection succeeded and the reporting layer threw it
+      away.
+
+    ``errors="replace"`` on the way in keeps an undecodable byte from
+    aborting a scan; the replacement character is still scannable text.
+    """
+    streams = (
+        (sys.stdin, "replace"),
+        (sys.stdout, "backslashreplace"),
+        (sys.stderr, "backslashreplace"),
+    )
+    for stream, errors in streams:
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        # A detached or already-closed stream is not worth failing a scan over.
+        with contextlib.suppress(ValueError, OSError):
+            reconfigure(encoding="utf-8", errors=errors)
+
+
+@app.callback()
+def _main() -> None:
+    """Run before every subcommand."""
+    _force_utf8_stdio()
+
+
+def _read_stdin_text() -> str:
+    """Read stdin as bytes and decode as UTF-8 explicitly.
+
+    Belt and braces alongside ``_force_utf8_stdio``: when stdin is a pipe that
+    was already wrapped before Ward started (or reconfigure is unavailable),
+    going via the raw buffer is the only way to see the real payload bytes.
+    """
+    buffer = getattr(sys.stdin, "buffer", None)
+    if buffer is None:  # pragma: no cover - CliRunner supplies a text-only stub
+        return str(sys.stdin.read())
+    raw: bytes = buffer.read()
+    return raw.decode("utf-8", errors="replace")
 
 
 def _load_pack(rule_pack: Path | None) -> RulePack:
@@ -171,7 +226,7 @@ def scan_stdin(
     rule_pack: RulePackOption = None,
 ) -> None:
     """Scan whatever is piped to stdin. The base command every other one wraps."""
-    text = sys.stdin.read()
+    text = _read_stdin_text()
     inputs = [build_input(_cast_surface(surface), text, location="stdin")]
     code = _run(
         inputs,
@@ -259,12 +314,44 @@ def scan_local(
     rule_pack: RulePackOption = None,
 ) -> None:
     """Scan the local git working tree: branch, recent commits, tags, doc files."""
+    # Establish that there is a repo to scan before reporting on it. Without
+    # this, `ward scan-local` in a non-git directory builds zero inputs and
+    # prints a confident PASS, and a missing git binary or bad --repo raises
+    # and exits 1 - which the GitHub Action reads as WARN and lets through.
+    if not repo.is_dir():
+        typer.echo(f"--repo is not a directory: {repo}", err=True)
+        raise typer.Exit(code=2)
+    try:
+        if not is_git_repo(repo):
+            typer.echo(
+                f"Not a git repository: {repo}\n"
+                "scan-local reads branch, commits, tags and tracked files from git. "
+                "Run it inside a checkout, or use scan-stdin for loose text.",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+    except GitError as exc:
+        typer.echo(f"git error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
     changed: set[str] = set()
     if suppression_base is not None:
-        if not ref_exists(repo, suppression_base):
-            typer.echo(f"--suppression-base ref not found: {suppression_base}", err=True)
-            raise typer.Exit(code=2)
-        changed = changed_files(repo, suppression_base)
+        try:
+            if not ref_exists(repo, suppression_base):
+                typer.echo(f"--suppression-base ref not found: {suppression_base}", err=True)
+                raise typer.Exit(code=2)
+            changed = changed_files(repo, suppression_base)
+        except GitError as exc:
+            # A shallow clone (actions/checkout's default) makes the merge-base
+            # diff fail. Falling back to an empty change set would trust every
+            # suppression directive in the PR, so refuse instead.
+            typer.echo(
+                f"Could not determine what changed since {suppression_base}: {exc}\n"
+                "Refusing to scan: provenance-aware suppression cannot be enforced. "
+                "If this is a shallow clone, deepen it (fetch-depth: 0).",
+                err=True,
+            )
+            raise typer.Exit(code=2) from exc
 
     def _trusts_suppressions(relname: str) -> bool:
         # With no base ref, every file is trusted (scanning your own checkout).
@@ -282,6 +369,17 @@ def scan_local(
     for tag in tag_names(repo):
         inputs.append(build_input("tag_name", tag, location=f"tag:{tag}"))
     ignore_patterns = load_patterns(repo)
+    # .wardignore suppresses content scanning by path, so it is exactly as
+    # attacker-controllable as a ward-allow-file directive and needs the same
+    # provenance gate. A PR that adds a .wardignore containing "*" would
+    # otherwise silence every content scan in the repo and still report PASS.
+    if suppression_base is not None and ignore_patterns and ".wardignore" in changed:
+        typer.echo(
+            ".wardignore was modified in this change; ignoring it. "
+            "Path suppression must predate the branch being scanned.",
+            err=True,
+        )
+        ignore_patterns = ()
     for path in walk_tracked_files(repo):
         suffix = path.suffix.lower()
         relname = str(path.relative_to(repo))
@@ -403,7 +501,7 @@ def judge_cmd(
     """
     from .judge import JudgeError, get_judge
 
-    text = sys.stdin.read()
+    text = _read_stdin_text()
     try:
         judge = get_judge(engine, model=model)
     except ValueError as exc:

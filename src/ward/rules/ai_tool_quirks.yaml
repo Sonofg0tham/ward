@@ -58,7 +58,7 @@
   severity: medium
   description: "Aider /add command pointing the agent at a sensitive file"
   patterns:
-    - '(?im)^\s*/add\s+(?:\.env|\.git/config|\.aws/credentials|~/\.ssh/|/etc/shadow|/etc/passwd)'
+    - '(?im)^[ \t]*/add\s+(?:\.env|\.git/config|\.aws/credentials|~/\.ssh/|/etc/shadow|/etc/passwd)'
   surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
@@ -67,7 +67,7 @@
   severity: medium
   description: "Continue.dev or Cline slash command embedded in text"
   patterns:
-    - '(?im)^\s*/(?:edit|share|terminal|cmd|run)\s+(?:rm|curl|wget|nc|cat\s+\.env)'
+    - '(?im)^[ \t]*/(?:edit|share|terminal|cmd|run)\s+(?:rm|curl|wget|nc|cat\s+\.env)'
   surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 

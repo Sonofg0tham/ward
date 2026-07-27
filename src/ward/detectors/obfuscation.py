@@ -44,6 +44,11 @@ _BIDI_CONTROLS = {
     "⁧": "RIGHT-TO-LEFT ISOLATE",
     "⁨": "FIRST STRONG ISOLATE",
     "⁩": "POP DIRECTIONAL ISOLATE",
+    # The two marks Trojan Source (arXiv:2111.00169) is actually built on.
+    # Their absence here meant an LRM/RLM payload was stripped by the
+    # normaliser and then reported by nothing at all.
+    "‎": "LEFT-TO-RIGHT MARK",
+    "‏": "RIGHT-TO-LEFT MARK",
 }
 
 _ZERO_WIDTH = {
@@ -53,6 +58,13 @@ _ZERO_WIDTH = {
     "⁠": "WORD JOINER",
     "﻿": "ZERO WIDTH NO-BREAK SPACE (BOM)",
     "᠎": "MONGOLIAN VOWEL SEPARATOR",
+    "­": "SOFT HYPHEN",
+    "⁡": "FUNCTION APPLICATION",
+    "⁢": "INVISIBLE TIMES",
+    "⁣": "INVISIBLE SEPARATOR",
+    "⁤": "INVISIBLE PLUS",
+    "️": "VARIATION SELECTOR-16",
+    "︎": "VARIATION SELECTOR-15",
 }
 
 

@@ -185,13 +185,36 @@ _REPEAT_RE_TO_ONE = re.compile(r"([A-Za-z])\1{2,}")
 _REPEAT_RE_TO_TWO = re.compile(r"([A-Za-z])\1{3,}")
 
 
+def is_invisible(ch: str) -> bool:
+    """True if ``ch`` is a character that renders as nothing to a human.
+
+    Category-driven rather than a hand-written list. The named set above
+    covers 15 codepoints, but Unicode defines 51 in the Cf (format) category
+    alone, and the ones that were missing are exactly the ones an attacker
+    reaches for: U+00AD SOFT HYPHEN, and U+200E / U+200F (the LRM/RLM bidi
+    marks that Trojan Source is built on). "ig" + U+00AD + "nore all previous
+    instructions" used to scan completely clean.
+
+    Variation selectors are included too: they carry no visible glyph on
+    their own but do split a word for a regex.
+    """
+    cp = ord(ch)
+    if ch in _INVISIBLE_CHARS:
+        return True
+    if _TAG_BLOCK_START <= cp <= _TAG_BLOCK_END:
+        return True
+    if 0xFE00 <= cp <= 0xFE0F:  # VARIATION SELECTOR-1..16
+        return True
+    if 0xE0100 <= cp <= 0xE01EF:  # VARIATION SELECTOR-17..256
+        return True
+    # Cf covers the zero-width and bidi formatting characters. Exclude nothing:
+    # no Cf codepoint carries visible meaning in the metadata Ward scans.
+    return unicodedata.category(ch) == "Cf"
+
+
 def strip_invisible(text: str) -> str:
     """Remove zero-width, bidi-override, and Unicode TAG-block characters."""
-    return "".join(
-        ch
-        for ch in text
-        if ch not in _INVISIBLE_CHARS and not (_TAG_BLOCK_START <= ord(ch) <= _TAG_BLOCK_END)
-    )
+    return "".join(ch for ch in text if not is_invisible(ch))
 
 
 def contains_unicode_tag(text: str) -> list[tuple[int, str]]:
@@ -237,10 +260,18 @@ def normalise_text(text: str) -> str:
 
 
 def contains_invisible(text: str) -> list[tuple[int, str, str]]:
-    """Return positions of invisible characters as (index, char, codepoint)."""
+    """Return positions of invisible characters as (index, char, codepoint).
+
+    Uses the same predicate as :func:`strip_invisible` minus the TAG block,
+    which has its own dedicated rule and finding. Stripping a character
+    without being able to report it would mean silently repairing a payload
+    and never telling anyone it was there.
+    """
     hits: list[tuple[int, str, str]] = []
     for idx, ch in enumerate(text):
-        if ch in _INVISIBLE_CHARS:
+        if _TAG_BLOCK_START <= ord(ch) <= _TAG_BLOCK_END:
+            continue  # reported separately as obf.unicode_tag
+        if is_invisible(ch):
             hits.append((idx, ch, f"U+{ord(ch):04X}"))
     return hits
 

@@ -37,7 +37,13 @@
   severity: high
   description: "'Developer mode', 'jailbreak mode', or DAN-style activation"
   patterns:
-    - '(?i)\b(?:developer\s+mode|debug\s+mode|jailbreak\s+mode|unrestricted\s+mode|admin\s+mode|god\s+mode)\b'
+    # Split by signal strength. "developer mode" needs an activating verb
+    # because it is also ordinary vocabulary; the jailbreak-specific terms
+    # stand alone. "debug mode" is dropped entirely - the DAN canon is
+    # "Developer Mode", and "enable debug mode with --verbose" is a sentence
+    # real projects write.
+    - '(?i)\b(?:jailbreak\s+mode|unrestricted\s+mode|god\s+mode)\b'
+    - '(?i)\b(?:enter|enable|activate|switch\s+to|go\s+into|you\s+are\s+(?:now\s+)?in)\s+(?:developer|admin)\s+mode\b'
     - '(?i)\bdan\s+mode\b'
     - '(?i)\bdo\s+anything\s+now\b'
   surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
@@ -48,7 +54,7 @@
   severity: high
   description: "Markdown block masquerading as a role-delimited message"
   patterns:
-    - '(?im)^\s*(?:###?\s*)?(?:system|assistant|user|tool)\s*:\s*$'
+    - '(?im)^[ \t]*(?:###?[ \t]*)?(?:system|assistant|user|tool)[ \t]*:[ \t]*$'
     - '(?i)\brole\s*:\s*(?:system|assistant|tool)\b'
   surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
   remediation: "Reject."

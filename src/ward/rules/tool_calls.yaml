@@ -52,7 +52,7 @@
   severity: high
   description: "Text impersonates a chat turn boundary the agent might trust"
   patterns:
-    - '(?im)^\s*(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION)\s*:\s*(?:.{0,400})$'
+    - '(?m)^(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION|User|Human|Assistant|Tool|Function)[ \t]*:[ \t]*(?:.{0,400})$'
   surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
   remediation: "Reject. Untrusted text simulating a conversation turn is an injection precursor."
 
@@ -71,6 +71,6 @@
   severity: medium
   description: "Bracketed pseudo-directive ([TOOL], [SYSTEM], [INSTRUCTION])"
   patterns:
-    - '(?im)^\s*\[\s*(?:TOOL|SYSTEM|INSTRUCTION|COMMAND|DIRECTIVE|ADMIN)\s*\]\s*(?:.{1,400})$'
+    - '(?im)^[ \t]*\[[ \t]*(?:TOOL|SYSTEM|INSTRUCTION|COMMAND|DIRECTIVE|ADMIN)[ \t]*\][ \t]*(?:.{1,400})$'
   surfaces: [pr_body, issue_body, file_content, commit_message, code_comment, stdin]
   remediation: "Reject."
