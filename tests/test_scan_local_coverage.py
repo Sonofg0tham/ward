@@ -111,20 +111,43 @@ def test_an_empty_repository_is_not_a_clean_result(tmp_path) -> None:
     assert "Nothing was scanned" in result.stderr
 
 
-def test_the_report_verdict_agrees_with_the_exit_code(tmp_path) -> None:
+def test_the_report_verdict_agrees_with_the_exit_code(rule_pack) -> None:
     """An unreadable file used to escalate the exit code AFTER emitting.
 
     So the JSON said verdict "pass" while the process exited 2, and an
     automated consumer reading the report got the opposite answer to a human
-    reading the exit code. It is a finding now, so aggregation decides both.
-    """
-    repo = _repo(tmp_path, {"README.md": "All clean.\n"})
-    # Replace a tracked file with a directory: read_bytes then raises OSError.
-    (repo / "README.md").unlink()
-    (repo / "README.md").mkdir()
+    reading the exit code about the same run. It is a finding now, so
+    aggregation decides both and they cannot diverge.
 
-    result = _scan(repo, "--format", "json")
-    assert result.returncode == 2
-    payload = json.loads(result.stdout)
+    Asserted on the invariant directly rather than by manufacturing an
+    unreadable file. The first version replaced a tracked file with a
+    directory, which raises OSError on Windows but is skipped outright by
+    the tracked-file walk on macOS and Linux - so it tested the filesystem's
+    behaviour rather than Ward's, and failed six CI jobs saying so.
+    """
+    from ward.core.engine import build_input, scan_inputs
+    from ward.core.models import Finding, Severity, Verdict
+    from ward.reporters import render_json
+
+    unreadable = Finding(
+        rule_id="scan.unreadable_file",
+        detector="scan-local",
+        category="scan_integrity",
+        severity=Severity.HIGH,
+        message="Tracked file could not be read, so its contents were not scanned",
+        surface="file_name",
+        location="notes.md",
+        evidence="notes.md",
+        remediation="Check permissions and re-run.",
+    )
+    report = scan_inputs(
+        [build_input("file_content", "All clean.", location="ok.md")],
+        rule_pack,
+        target="t",
+        extra_findings=(unreadable,),
+    )
+    assert report.verdict is Verdict.FAIL
+    assert report.exit_code == 2
+    payload = json.loads(render_json(report))
     assert payload["verdict"] == "fail", "the report claimed a clean scan while exiting 2"
     assert any(f["rule_id"] == "scan.unreadable_file" for f in payload["findings"])
