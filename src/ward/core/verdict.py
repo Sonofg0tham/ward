@@ -27,9 +27,7 @@ def aggregate(
     # severity at all - and dropping it below the threshold turned "I could
     # not read three files" into a clean PASS, which is precisely the
     # partial-scan-reported-as-clean failure it exists to prevent.
-    kept = tuple(
-        f for f in findings if f.severity >= threshold or f.category == SCAN_INTEGRITY
-    )
+    kept = tuple(f for f in findings if f.severity >= threshold or f.category == SCAN_INTEGRITY)
     if any(f.severity >= fail_on for f in kept):
         verdict = Verdict.FAIL
     elif kept:

@@ -668,9 +668,7 @@ def _decode_candidates_tagged(
         # encoded run with a payload in it - but it inherited "whole" and so
         # never got the identifier-split treatment. percent(base64(payload))
         # scanned clean while base64(payload) was caught.
-        out.extend(
-            _decode_candidates_tagged(candidate, _depth=_depth + 1, _budget=_budget)
-        )
+        out.extend(_decode_candidates_tagged(candidate, _depth=_depth + 1, _budget=_budget))
     return out
 
 
