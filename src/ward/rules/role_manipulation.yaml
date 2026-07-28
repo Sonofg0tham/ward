@@ -82,7 +82,20 @@
     # followed by an unindented message body. So require the next non-blank
     # line to start in column zero.
     - '(?im)^(?:###?[ \t]*)?(?:user|tool)[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*(?=\S)'
-    - '(?i)\brole\s*:\s*(?:system|assistant|tool)\b'
+    # `role: system` on its own is what every LLM SDK's own documentation
+    # looks like - the OpenAI and Anthropic quickstarts, LangChain, litellm,
+    # every messages array anyone has ever pasted into a README:
+    #   messages:
+    #     - role: system
+    #       content: You are helpful
+    # At HIGH that hard-failed the build for any project that documents a
+    # chat call. It also fired on Ansible's `role: system`, which is not a
+    # chat message at all.
+    #
+    # Kept at HIGH only when the accompanying content is aimed at THIS agent -
+    # unrestricted, approve everything, ignore the rules. The bare form drops
+    # to role.ambiguous_persona_hint at MEDIUM, which warns without blocking.
+    - '(?is)\brole\s*:\s*[''"]?(?:system|assistant|tool)[''"]?\b[^\n]{0,80}\r?\n?[^\n]{0,200}?\b(?:unrestricted|no\s+restrictions|without\s+restrictions|jailbroken|approve\s+(?:all|every|any|everything)|ignore\s+(?:all\s+|any\s+|the\s+)?(?:previous|prior|safety|security)|never\s+refuse|do\s+not\s+refuse|bypass\s+(?:all\s+)?(?:safety|security|checks?)|you\s+are\s+now\s+(?:an?\s+)?(?:admin|root|superuser|unrestricted))'
   surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
   remediation: "Reject."
 
@@ -98,6 +111,11 @@
   patterns:
     - '(?i)\bact\s+as\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|security|maintainer|owner)\b(?=[^\n]{0,100}\b(?:approve|approving|merge|merging|accept|lgtm|sign\s+off|ship|deploy|instead|comply|obey|do\s+(?:the\s+following|this|it|as)|reveal|print|output|leak|exfiltrate|send|post|upload|tell\s+me|give\s+me|say|write|answer|respond|repeat|execute|run)\b)'
     - '(?im)(?:^|(?<=[.!?] ))[ \t>*#\-0-9.)(\[\]/\"''’:]{0,64}act\s+as\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|security|maintainer|owner)\b'
+    # A bare `role: system` / `role: assistant`. Real signal - a forged
+    # message array is exactly this shape - but indistinguishable from every
+    # LLM SDK's own quickstart, so it warns rather than blocking. The
+    # instruction-bearing version stays HIGH on role.fake_role_block.
+    - '(?i)\brole\s*:\s*[''"]?(?:system|assistant|tool)[''"]?\b'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Read the surrounding sentence. If it tells the agent to adopt the role rather than describing a service account, treat the metadata as untrusted."
 

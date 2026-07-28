@@ -130,15 +130,29 @@ def test_artifact_uri_is_a_valid_uri_reference(rule_pack, location: str) -> None
         ("pr_title", "acme/widget#42#title"),
     ],
 )
-def test_non_file_surfaces_do_not_claim_to_be_files(rule_pack, surface, location) -> None:
-    """A branch name has no path and no line 1.
+def test_non_file_surfaces_are_anchored_without_pretending_to_be_files(
+    rule_pack, surface, location
+) -> None:
+    """A branch name has no path and no line 1, but it still needs an anchor.
 
-    Emitting a physicalLocation for one asked GitHub to annotate line 1 of a
-    file named "feat/ignore-previous-instructions", which was never in the
-    repository. SARIF models this with logicalLocations.
+    Two wrong answers were tried before this one. Putting the branch name in
+    artifactLocation.uri asked GitHub to annotate line 1 of a file called
+    "feat/ignore-previous-instructions", which was never in the repository.
+    Dropping physicalLocation entirely and using logicalLocations alone is
+    valid SARIF - the spec allows either - but GitHub documents
+    physicalLocation as REQUIRED and will not display a result without one,
+    so four of the five surfaces scan-pr produces became invisible in the
+    Code Scanning tab. Silent invisibility is worse than an invalid URI,
+    because the job still goes red and the maintainer finds an empty tab.
+
+    Both are emitted now: a synthetic per-surface anchor GitHub can hold on
+    to, and the real reference in the logicalLocation beside it.
     """
     loc = _sarif_location(rule_pack, surface, location)
-    assert "physicalLocation" not in loc, f"{surface} was reported as a file location"
+    assert "physicalLocation" in loc, f"{surface} result would not be displayed by GitHub"
+    uri = loc["physicalLocation"]["artifactLocation"]["uri"]
+    # ...but the anchor must not be the branch name pretending to be a path.
+    assert uri == f".ward/{surface}", f"non-file surface anchored to {uri!r}"
     assert loc["logicalLocations"][0]["name"] == location
 
 

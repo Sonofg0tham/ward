@@ -50,11 +50,33 @@ def _rule_descriptor(finding: Finding) -> dict[str, object]:
     }
 
 
-# Surfaces that genuinely correspond to a file on disk. Everything else -
-# a branch name, a commit message, a PR body - is not a file, and describing
-# it with a physicalLocation asks GitHub to annotate a path that does not
-# exist. SARIF has logicalLocations for exactly this.
+# Surfaces that genuinely correspond to a file on disk.
 _FILE_SURFACES = frozenset({"file_name", "directory_name", "file_content", "code_comment"})
+
+# Where a non-file finding is anchored instead.
+#
+# A branch name is not a file, so the obvious move is to describe it with
+# logicalLocations alone and no physicalLocation - which is what the previous
+# version of this file did, and it was wrong in a way the SARIF spec does not
+# catch. The spec permits a location carrying either kind, so the document
+# validates; GitHub's code-scanning ingest is stricter and documents
+# physicalLocation as REQUIRED, noting that at least one location is needed
+# for a result to be displayed. Results without one are not rendered as
+# alerts, and github/codeql-action#1738 shows the harsher outcome where the
+# whole upload is rejected for "expected at least one location" - which would
+# take the file findings down with the rest.
+#
+# So four of the five surfaces scan-pr produces became invisible in the Code
+# Scanning tab. The exit code stayed correct and the job still went red, but
+# the maintainer clicked through to an empty tab. That is a worse trade than
+# the schema-invalid URI it was fixing.
+#
+# Both are emitted now: a stable synthetic path per surface so GitHub has
+# something to anchor to, and the logicalLocation alongside it carrying the
+# real branch or PR reference. The synthetic paths live under .ward/ and are
+# not expected to exist in the repository - GitHub annotates what it can and
+# still lists the alert either way.
+_SURFACE_ANCHOR = ".ward"
 
 
 def _artifact_uri(location: str) -> str:
@@ -79,17 +101,24 @@ def _location(finding: Finding, *, target: str) -> dict[str, object]:
                 "region": {"startLine": 1},
             }
         }
-    # A branch name or PR body has no file and no line. Claiming line 1 of a
-    # file named "feat/ignore-previous-instructions" produced an annotation
-    # pointing at a path that was never in the repository.
+    # Every result carries a physicalLocation, because GitHub will not display
+    # one that does not. The anchor is a synthetic per-surface path rather
+    # than the branch name itself: annotating line 1 of a file called
+    # "feat/ignore-previous-instructions" pointed at a path that was never in
+    # the repository, which is the thing this stopped doing.
     return {
+        "physicalLocation": {
+            "artifactLocation": {"uri": f"{_SURFACE_ANCHOR}/{finding.surface}"},
+            "region": {"startLine": 1},
+        },
+        # The real reference lives here, where it cannot be mistaken for a path.
         "logicalLocations": [
             {
                 "name": raw,
                 "kind": "member",
                 "fullyQualifiedName": f"{finding.surface}:{raw}",
             }
-        ]
+        ],
     }
 
 

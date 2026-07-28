@@ -57,7 +57,23 @@
   severity: high
   description: "Text impersonates a chat turn boundary the agent might trust"
   patterns:
-    - '(?m)^[ \t]*(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION|User|Human|Assistant|Tool|Function)[ \t]*:[ \t]*(?:.{0,400})$'
+    # WHICH SPEAKER is forged decides, not how many turns there are.
+    #
+    # A single "ASSISTANT:" line is an attack on its own: the attacker is
+    # writing the agent's own reply for it, and nobody puts that label in
+    # documentation. Requiring a second turn to fire broke exactly that case
+    # (fixtures 27 and 45) while fixing the false positives below.
+    - '(?m)^[ \t]*(?:ASSISTANT|Assistant|SYSTEM|System|AI|A\.?I\.?)[ \t]*:[ \t]*(?:.{0,400})$'
+    # USER / HUMAN / TOOL / FUNCTION alone are not. One labelled line is a
+    # table or a heading, and all three of these hard-failed a build at HIGH:
+    #   User: admin                    <- seeded-account docs
+    #   Function: parse_config(path)   <- an API reference
+    #   Tool: ripgrep                  <- a tooling table
+    # They become a forged transcript only in company, so require a SECOND
+    # turn by a DIFFERENT speaker. That keeps a column of "User: alice /
+    # User: bob" in a permissions table benign. Line counts are bounded so
+    # the pattern stays linear.
+    - '(?m)^[ \t]*(?P<speaker>USER|HUMAN|TOOL|FUNCTION|User|Human|Tool|Function)[ \t]*:[ \t]*[^\n]{0,400}(?:\r?\n[^\n]{0,400}){0,6}?\r?\n[ \t]*(?!(?P=speaker)[ \t]*:)(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION|User|Human|Assistant|Tool|Function|SYSTEM|System)[ \t]*:'
   surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
   remediation: "Reject. Untrusted text simulating a conversation turn is an injection precursor."
 
