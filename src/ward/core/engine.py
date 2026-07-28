@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from fnmatch import fnmatchcase
+from typing import get_args
 
 from ..detectors import ALL_DETECTOR_CLASSES
 from ..detectors.base import Detector
@@ -44,6 +45,11 @@ _IDENTIFIER_SURFACES: frozenset[Surface] = frozenset(
 # suppression that does not flow through scan content at all.
 _SUPPRESSION_SURFACES: frozenset[Surface] = frozenset({"file_content"})
 
+# Every surface the model declares, as runtime data. ``Surface`` is a Literal,
+# which is enforced by a type checker and by nothing else - and the callers
+# that matter here are the untyped ones going through the documented SDK.
+VALID_SURFACES: frozenset[str] = frozenset(get_args(Surface))
+
 # NO CAP ON HOW MANY DECODED PAYLOADS GET THE EVASION TREATMENT.
 #
 # There was one, of 8, added for performance in the same change that started
@@ -75,6 +81,19 @@ def build_input(
     untrusted (e.g. a file changed by the current PR): the directive is then
     ignored so an attacker cannot suppress detection by editing a doc file.
     """
+    # A surface no rule declares matches nothing, so a typo silently disables
+    # every rule and the scan reports PASS for any input. `build_input` is the
+    # documented SDK entry point - the README's LangGraph and CrewAI snippets
+    # both call it - so a caller writing "pr_bodyy" got a clean bill of health
+    # on a payload rather than an error. Surface is a Literal, which mypy
+    # checks for typed callers and does nothing at all for the untyped ones
+    # this is aimed at.
+    if surface not in VALID_SURFACES:
+        raise ValueError(
+            f"Unknown surface {surface!r}. No rule declares it, so nothing would "
+            f"be scanned and the result would be PASS whatever the input. "
+            f"Valid surfaces: {', '.join(sorted(VALID_SURFACES))}."
+        )
     if text is None:
         text = ""
     normalised = normalise_text(text)
