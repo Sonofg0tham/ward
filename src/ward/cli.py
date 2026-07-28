@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import sys
 import unicodedata
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
@@ -181,7 +182,21 @@ def _text_score(text: str) -> float:
     return (ascii_like + spacing - penalty) / n
 
 
-def _read_text_file(path: Path) -> str | None:
+@dataclass(frozen=True)
+class _Readings:
+    """Every plausible decoding of one file, plus which is most likely real.
+
+    ``primary`` indexes the reading that scored best. Only the character-level
+    obf.* rules care: on a non-primary reading an invisible character is a
+    decoding artefact rather than evidence. Text rules see every reading, so
+    no encoding can hide a payload behind a wrong guess.
+    """
+
+    texts: list[str]
+    primary: int
+
+
+def _read_text_file(path: Path) -> _Readings | None:
     """Read a tracked file as text, detecting the common UTF encodings.
 
     Returns None only when the file exists but its bytes cannot be read, so
@@ -202,10 +217,10 @@ def _read_text_file(path: Path) -> str | None:
         raw = path.read_bytes()
     except FileNotFoundError:
         # Tracked but not on disk: a deletion, not a gap. Nothing to scan.
-        return ""
+        return _Readings(texts=[], primary=0)
     except IsADirectoryError:
         # A submodule gitlink, or a path that became a directory. Not content.
-        return ""
+        return _Readings(texts=[], primary=0)
     except OSError:
         return None
     for bom, encoding in (
@@ -220,7 +235,10 @@ def _read_text_file(path: Path) -> str | None:
                 # lstrip the BOM: decoding utf-16-le leaves it as a literal
                 # U+FEFF, which is in the zero-width set - so every legitimate
                 # UTF-16 document would report obf.zero_width on its own BOM.
-                return raw.decode(encoding, errors="replace").lstrip("﻿")
+                return _Readings(
+                    texts=[raw.decode(encoding, errors="replace").lstrip("﻿")],
+                    primary=0,
+                )
             except (UnicodeError, LookupError):  # pragma: no cover - defensive
                 break
     # No BOM. Do NOT try to pick one encoding - scan every plausible reading.
@@ -240,7 +258,7 @@ def _read_text_file(path: Path) -> str | None:
     text8 = raw.decode("utf-8", errors="replace")
     if b"\x00" not in raw:
         # Valid UTF-8 text does not contain NUL. Nothing to reinterpret.
-        return text8
+        return _Readings(texts=[text8], primary=0)
     candidates = [text8]
     for encoding in ("utf-16-le", "utf-16-be"):
         try:
@@ -248,19 +266,33 @@ def _read_text_file(path: Path) -> str | None:
         except (UnicodeError, LookupError):  # pragma: no cover - defensive
             continue
 
-    # RANK the readings; do not threshold them. The best-scoring one is the
-    # document and keeps its formatting characters, so real obfuscation is
-    # still reported. Every other reading is a by-product and is stripped, so
-    # a re-decode cannot manufacture one: re-reading ordinary ASCII as
-    # UTF-16-LE turns the pair ". " (0x2E 0x20) into U+202E RIGHT-TO-LEFT
-    # OVERRIDE, and one NUL byte in a prose file was enough to raise a HIGH
-    # obf.bidi_override on text containing no such character.
+    # Rank the readings, but NEVER let the ranking destroy content. Stripping
+    # the losers meant a wrong guess deleted the payload: appending 2 KB of
+    # UTF-16 filler to a UTF-8 document flipped the winner, the true reading
+    # was stripped, and a TAG-block payload went from FAIL to PASS. Rank is a
+    # guess; a guess must not authorise deletion.
+    #
+    # So every reading is returned intact and the CALLER suppresses the
+    # character-level obf.* rules on the non-primary ones. Text rules see
+    # everything - no encoding can hide a payload - while a re-decode cannot
+    # manufacture an obfuscation finding, which is what re-reading ASCII as
+    # UTF-16-LE does (the pair ". " lands on U+202E RIGHT-TO-LEFT OVERRIDE).
+    primary = 0
+    # "Is the raw valid UTF-8" looks decidable and is not usable here: a
+    # Cyrillic UTF-16-LE document decodes as valid UTF-8 control characters,
+    # so that test picks the wrong reading for exactly the files this path
+    # exists to handle. Ranking stays - but it now only chooses which reading
+    # the obf.* rules trust, never which text gets scanned, so a wrong choice
+    # costs precision rather than opening a bypass.
     best = max(range(len(candidates)), key=lambda i: _text_score(candidates[i]))
     readings: list[str] = []
     for i, text in enumerate(candidates):
-        reading = text if i == best else _strip_format_chars(text)
-        if reading and reading not in readings:
-            readings.append(reading)
+        if not text or text in readings:
+            continue
+        readings.append(text)
+        if i == best:
+            primary = len(readings) - 1
+    return _Readings(texts=readings, primary=primary if readings else 0)
     return "\n".join(readings)
 
 
@@ -532,26 +564,42 @@ def scan_local(
         if is_ignored(relname, ignore_patterns):
             continue
         if suffix in DOC_SUFFIXES:
-            content = _read_text_file(path)
-            if content is None:
+            readings = _read_text_file(path)
+            if readings is None:
                 unreadable.append(relname)
                 continue
-            inputs.append(
-                build_input(
-                    "file_content",
-                    content,
-                    location=relname,
-                    trust_suppressions=_trusts_suppressions(relname),
+            for idx, content in enumerate(readings.texts):
+                inputs.append(
+                    build_input(
+                        "file_content",
+                        content,
+                        location=relname,
+                        trust_suppressions=_trusts_suppressions(relname),
+                        # An invisible character in a NON-primary decoding is a
+                        # by-product of re-reading the bytes, not evidence -
+                        # re-reading ASCII as UTF-16-LE turns ". " into U+202E.
+                        # Suppressing the character-level rules there beats
+                        # deleting the characters, which let a wrong ranking
+                        # destroy a real payload.
+                        suppress_rules=None if idx == readings.primary else ("obf.*",),
+                    )
                 )
-            )
         elif suffix in CODE_SUFFIXES:
-            content = _read_text_file(path)
-            if content is None:
+            readings = _read_text_file(path)
+            if readings is None:
                 unreadable.append(relname)
                 continue
-            # Top-of-file comments only - cheap, high signal.
-            top = "\n".join(content.splitlines()[:40])
-            inputs.append(build_input("code_comment", top, location=f"{relname}:top"))
+            for idx, content in enumerate(readings.texts):
+                # Top-of-file comments only - cheap, high signal.
+                top = "\n".join(content.splitlines()[:40])
+                inputs.append(
+                    build_input(
+                        "code_comment",
+                        top,
+                        location=f"{relname}:top",
+                        suppress_rules=None if idx == readings.primary else ("obf.*",),
+                    )
+                )
 
     target = f"local:{repo}"
     head = head_sha(repo)

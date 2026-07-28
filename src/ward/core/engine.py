@@ -50,6 +50,7 @@ def build_input(
     *,
     location: str = "",
     trust_suppressions: bool = True,
+    suppress_rules: tuple[str, ...] | None = None,
 ) -> ScanInput:
     """Wrap a raw string into a ``ScanInput`` with normalised + decoded forms.
 
@@ -108,6 +109,11 @@ def build_input(
     suppressed: frozenset[str] = frozenset()
     if trust_suppressions and surface in _SUPPRESSION_SURFACES:
         suppressed = extract_suppressions(text)
+    if suppress_rules:
+        # Caller-supplied, not attacker-supplied: used for alternate decodings
+        # of a file, where a character-level finding would be an artefact of
+        # the re-decode rather than something present in the document.
+        suppressed = suppressed | frozenset(suppress_rules)
     return ScanInput(
         surface=surface,
         raw=text,
