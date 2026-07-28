@@ -343,14 +343,36 @@ def _emit(
     console: Console,
 ) -> int:
     fmt_lower = fmt.lower()
-    if fmt_lower == "pretty":
-        render_pretty(report, console)
-    elif fmt_lower == "json":
-        typer.echo(render_json(report))
-    elif fmt_lower == "sarif":
-        typer.echo(render_sarif(report))
-    else:
+    if fmt_lower not in ("pretty", "json", "sarif"):
         raise typer.BadParameter(f"--format must be pretty|json|sarif (got {fmt!r})")
+
+    # The verdict is decided before anything is rendered, and rendering must
+    # never be able to change it. A crash in a reporter used to escape as an
+    # uncaught traceback, which exits 1 - and the Action reads exit 1 as WARN
+    # and PASSES the job. So a FAIL that Ward had correctly determined turned
+    # into a green tick because a table cell would not render.
+    #
+    # The trigger was real, not theoretical: any unmatched Rich markup in the
+    # scanned text, e.g. "[INST] ... [/INST]", which is precisely the kind of
+    # payload Ward exists to catch. That specific bug is fixed at source in
+    # reporters/pretty.py, but the exit code must not depend on having found
+    # every such bug, so failure to render is now reported AND fails closed.
+    try:
+        if fmt_lower == "pretty":
+            render_pretty(report, console)
+        elif fmt_lower == "json":
+            typer.echo(render_json(report))
+        else:
+            typer.echo(render_sarif(report))
+    except Exception as exc:  # deliberately broad - see the comment above
+        typer.secho(
+            f"Ward could not render the {fmt_lower} report: {exc!r}\n"
+            f"The scan itself completed: verdict={report.verdict.value.upper()}, "
+            f"findings={len(report.findings)}. Failing closed.",
+            err=True,
+            fg="red",
+        )
+        return max(report.exit_code, 2)
     return report.exit_code
 
 
