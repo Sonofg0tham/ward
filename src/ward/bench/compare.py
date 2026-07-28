@@ -15,11 +15,15 @@ from typing import Any
 # them used to be silence: anything under 5pp produced no verdict line, and
 # the summary then claimed there had been no change.
 #
-# _NOTICEABLE is 0.1pp rather than 0, because floating-point recall over a few
-# hundred rows wobbles in the last decimal place and a diff that shouts about
-# 0.0001pp is one nobody reads.
+# _NOTICEABLE IS TIED TO THE TABLE'S OWN ROUNDING, not chosen independently.
+# It was 0.1pp while _delta_pp prints anything at or above 0.05pp, which left
+# a band where the table said "-0.1pp" and the summary directly underneath it
+# said "No change to headline detection numbers". The summary must never
+# contradict the table, and the only way to guarantee that is for both to use
+# one number: if the delta is worth printing, it is worth a verdict line.
 _LOUD = 0.05
-_NOTICEABLE = 0.001
+_DELTA_ROUNDS_TO_ZERO_BELOW = 0.05  # in percentage points, as printed
+_NOTICEABLE = _DELTA_ROUNDS_TO_ZERO_BELOW / 100
 
 
 def _load(path: str | Path) -> dict[str, Any]:
@@ -43,7 +47,7 @@ def _delta_pp(new: float | None, base: float | None) -> str:
     if new is None or base is None:
         return "n/a"
     delta = (new - base) * 100
-    if abs(delta) < 0.05:  # rounds to 0.0pp
+    if abs(delta) < _DELTA_ROUNDS_TO_ZERO_BELOW:  # rounds to 0.0pp
         return "±0.0pp"
     return f"{delta:+.1f}pp"
 

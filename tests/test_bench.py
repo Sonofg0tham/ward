@@ -434,3 +434,35 @@ def test_a_small_false_positive_drop_on_its_own_is_reported():
 
     body = render_diff(_sample_report(0.80, 0.04, {}), _sample_report(0.80, 0.00, {}))
     assert "No change" not in body
+
+
+def test_the_summary_never_contradicts_the_table():
+    """ "No change" and a non-zero delta must not appear in the same report.
+
+    The verdict threshold was chosen independently of the table's rounding -
+    0.1pp against 0.05pp - which left a band where the table printed "-0.1pp"
+    and the line directly underneath it said "No change to headline detection
+    numbers". One real corpus row regressing lands exactly in that band.
+
+    Rather than test the two thresholds separately, this asserts the property
+    that matters across the whole band: if the table shows a movement, the
+    summary must acknowledge it.
+    """
+    import re
+
+    from ward.bench.compare import render_diff
+
+    base = 889 / 1662
+    for delta_rows in range(-4, 5):
+        new = (889 + delta_rows) / 1662
+        body = render_diff(_sample_report(base, 0.0, {}), _sample_report(new, 0.0, {}))
+        row = next(line for line in body.splitlines() if "In-scope recall" in line)
+        printed = row.split("|")[4].strip()
+        moved = not re.fullmatch(r"±0\.0pp", printed)
+        says_no_change = "No change to headline detection numbers" in body
+        assert not (moved and says_no_change), (
+            f"table shows {printed} while the summary claims no change ({delta_rows:+d} rows)"
+        )
+        assert not (not moved and not says_no_change), (
+            f"table shows {printed} but the summary does not say no change ({delta_rows:+d} rows)"
+        )
