@@ -44,12 +44,20 @@ _IDENTIFIER_SURFACES: frozenset[Surface] = frozenset(
 # suppression that does not flow through scan content at all.
 _SUPPRESSION_SURFACES: frozenset[Surface] = frozenset({"file_content"})
 
-# How many decoded payloads get the full evasion treatment. Each base costs a
-# handful of extra derived forms, and the decoder can legitimately return many
-# candidates for a document full of hashes, so this bounds the multiplication
-# without capping detection in any realistic case - a payload arrives in one
-# or two blobs, not fifty.
-_MAX_DECODED_EVASION_BASES = 8
+# NO CAP ON HOW MANY DECODED PAYLOADS GET THE EVASION TREATMENT.
+#
+# There was one, of 8, added for performance in the same change that started
+# applying evasion transforms to decoded text. It was a bypass: eight decoy
+# base64 blobs in front of the real one pushed it past the boundary and the
+# payload scanned completely clean. The attacker chooses how many blobs go in
+# a PR body, so any positional cap is a cap the attacker controls.
+#
+# It was not buying anything either. Measured across 0 to 1000 decoy blobs
+# (59KB), removing it cost 0.499s -> 0.594s, and total decoded volume is
+# already bounded upstream by decode_candidates' byte budget - so this was a
+# second bound on something already bounded, in the one form that could be
+# stepped over. If the work here ever does need limiting, limit it by total
+# volume, never by position in the document.
 
 
 def build_input(
@@ -116,7 +124,7 @@ def build_input(
     # any multi-word payload in a branch name MUST be delimited - which meant
     # base64 of a branch-shaped payload was the natural encoding to reach for
     # and the one guaranteed to get through.
-    for payload in decoded_payloads[:_MAX_DECODED_EVASION_BASES]:
+    for payload in decoded_payloads:
         split_payload = split_identifier(payload)
         if split_payload != payload:
             _add(split_payload)
