@@ -143,11 +143,36 @@ def _read_stdin_text() -> str:
 
 
 def _strip_format_chars(text: str) -> str:
-    """Drop invisible and bidi formatting characters from a derived reading.
-
-    Only ever applied to an ALTERNATE decoding, never to the text as written.
-    """
+    """Drop invisible and bidi formatting characters from a derived reading."""
     return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+
+
+def _looks_like_real_utf16(raw: bytes, encoding: str) -> bool:
+    """True if ``raw`` really is UTF-16 in this endianness, not an artefact.
+
+    Decides whether an alternate reading is the document or a by-product.
+    Re-reading ASCII as UTF-16 manufactures format characters, so those have
+    to be stripped - but a genuine BOM-less UTF-16 file has the SAME shape,
+    and stripping there deletes the payload. Blanket stripping made
+    obf.bidi_override, obf.unicode_tag and obf.zero_width blind on any
+    BOM-less UTF-16 file, and the attacker chooses whether to write a BOM.
+
+    Real UTF-16 with an ASCII component puts the NUL on one fixed parity:
+    high byte second for little-endian, first for big-endian.
+    """
+    if len(raw) < 2 or len(raw) % 2:
+        return False
+    head = raw[:4096]
+    even = sum(1 for i in range(0, len(head) - 1, 2) if head[i] == 0)
+    odd = sum(1 for i in range(1, len(head), 2) if head[i] == 0)
+    pairs = max(1, len(head) // 2)
+    # The decisive signal is that NO NUL sits on the WRONG parity. The density
+    # bar is deliberately low, because non-Latin characters and surrogate
+    # pairs carry no NUL at all - a TAG-block payload (U+E0000+) is all
+    # surrogates, and a 90% bar rejected the very file the check exists for.
+    if encoding == "utf-16-le":
+        return even == 0 and odd * 4 >= pairs
+    return odd == 0 and even * 4 >= pairs
 
 
 def _read_text_file(path: Path) -> str | None:
@@ -226,7 +251,8 @@ def _read_text_file(path: Path) -> str | None:
         # character. Their presence in a re-decode is a decoding artefact,
         # never evidence; the primary UTF-8 reading still carries the real
         # ones, so genuine obfuscation is still reported.
-        alt = _strip_format_chars(alt)
+        if not _looks_like_real_utf16(raw, encoding):
+            alt = _strip_format_chars(alt)
         if alt and alt not in readings:
             readings.append(alt)
     return "\n".join(readings)

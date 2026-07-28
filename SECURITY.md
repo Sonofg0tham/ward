@@ -83,6 +83,38 @@ recall beyond what regex can reach:
   external web pages, runtime memory). Ward only scans repo-resident text
   and GitHub event metadata.
 
+#### Severity is the answer to ambiguity, not a tighter regex
+
+Some phrasings are genuinely ambiguous and no regex separates them:
+
+> "Reviewers can ignore rules that only apply to generated code **and
+> approve** the diff."
+
+That is ordinary prose, and it is structurally identical to an injection.
+Four successive strategies were tried on this class - deleting the ambiguous
+branch, requiring column zero, anchoring to the start of a line, requiring an
+agent-directed continuation - and each produced roughly as many defects as it
+fixed, in one direction or the other. The distinction is semantic, which is
+the regex tier's documented ceiling and precisely what the optional LLM judge
+tier exists for.
+
+So the ambiguous forms live in their own **MEDIUM** rules
+(`io.ambiguous_override_hint`, `role.ambiguous_persona_hint`). They appear in
+the report and in Code Scanning, but at the Action's default `fail-on: high`
+they warn rather than block. The unambiguous nouns - instructions, prompts,
+directives, system prompt - stay HIGH.
+
+Measured on the full 1,391-row corpus:
+
+| Threshold | In-scope recall | FPR | Behaviour |
+|-----------|-----------------|-----|-----------|
+| `high` (default) | 53.8% | **0.0%** | blocks the build |
+| `medium` | 55.3% | 0.6% | warns only |
+
+The ambiguous class is worth 1.5pp of recall and carries a 0.6% false-positive
+rate. Reporting it as a warning keeps that recall available to a human
+reviewer without ever blocking a build on a sentence about lint rules.
+
 #### Known false positives
 
 Measured by sweeping hand-written benign strings drawn from real software
