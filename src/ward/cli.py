@@ -193,7 +193,19 @@ def _readable_text(text: str) -> str:
         return ""
     readable = _UNREADABLE_RUN.sub(" ", text)
     # Control characters that are not whitespace are binary residue too.
-    readable = "".join(ch for ch in readable if ch.isprintable() or ch in "\n\r\t")
+    # Cf characters are KEPT. str.isprintable() is False for the whole
+    # format category, so filtering on it deleted every Unicode TAG-block
+    # character before build_input ever saw the text - and the TAG block is
+    # how an instruction is made invisible to a human and plain to a
+    # tokeniser. A TAG payload in AGENTS or Dockerfile scanned completely
+    # clean. These are exactly the characters the obfuscation detectors and
+    # the TAG decoder exist to see; stripping them here removed the evidence
+    # and the payload in one step.
+    readable = "".join(
+        ch
+        for ch in readable
+        if ch.isprintable() or ch in "\n\r\t" or unicodedata.category(ch) == "Cf"
+    )
     return readable if len(readable.strip()) >= _MIN_READABLE_CHARS else ""
 
 
@@ -262,7 +274,15 @@ def _tokenizer_markers_are_whole_values(node: object) -> bool:
     """
     if isinstance(node, str):
         marker = _TOKENIZER_MARKER.search(node)
-        return marker is None or marker.group(0) == node.strip()
+        if marker is None:
+            return True
+        # A Jinja chat template legitimately embeds the markers in a longer
+        # string - that IS the file's purpose - and every ChatML tokenizer
+        # config ships one. Template syntax is the discriminator: prose
+        # carrying a forged control token does not contain "{%" or "{{".
+        if "{%" in node or "{{" in node:
+            return True
+        return marker.group(0) == node.strip()
     if isinstance(node, dict):
         return all(
             _tokenizer_markers_are_whole_values(k) and _tokenizer_markers_are_whole_values(v)
@@ -802,7 +822,7 @@ def scan_local(
             # The readable parts are scanned; the undecodable runs are dropped.
             # Nothing is skipped on the strength of a ratio, so padding cannot
             # remove a file from the scan.
-            for content in readings.texts:
+            for idx, content in enumerate(readings.texts):
                 readable = _readable_text(content)
                 if not readable:
                     continue
@@ -819,7 +839,14 @@ def scan_local(
                         # undecodable runs were removed, which is an artefact
                         # of this reconstruction rather than something in the
                         # document. The text rules still see everything.
-                        suppress_rules=("obf.*", *_structural_suppressions(readable)),
+                        # obf.* only on the NON-primary readings, as the other
+                        # two branches do. Suppressing it unconditionally meant
+                        # obf.unicode_tag, obf.bidi_override and obf.zero_width
+                        # could never fire on an extensionless file at all.
+                        suppress_rules=(
+                            *((), ("obf.*",))[idx != readings.primary],
+                            *_structural_suppressions(readable),
+                        ),
                     )
                 )
         else:

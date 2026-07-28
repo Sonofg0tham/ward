@@ -165,6 +165,30 @@ _CONFUSABLE_FOLD = str.maketrans(
 )
 
 
+def strip_combining_marks(text: str) -> str:
+    """Base characters with their combining marks removed.
+
+    NFKC composes what it can, but a mark with no precomposed form survives
+    untouched, and that is a one-character bypass of every text rule:
+
+        "I" + U+0332 COMBINING LOW LINE + "gnore all previous instructions"
+
+    renders as an underlined I, reads as "Ignore" to a model, and matches no
+    Latin-only pattern because the token is "I̲gnore".
+
+    THIS IS AN ADDITIONAL FORM, NOT A REPLACEMENT FOR THE TEXT. Doing it
+    inside normalise_text corrupted legitimate content: NFD decomposes
+    Cyrillic U+0439 into U+0438 plus a combining breve, so stripping marks
+    turned every Russian word containing it into a different word and broke
+    the multilingual detection outright. Marks are semantic in most of the
+    world's scripts and only suspicious in a Latin word that has no business
+    carrying one.
+    """
+    return "".join(
+        ch for ch in unicodedata.normalize("NFD", text) if unicodedata.category(ch) != "Mn"
+    )
+
+
 def confusable_fold(text: str) -> str:
     """Fold confusable Cyrillic / Greek characters to their Latin look-alikes.
 
@@ -441,6 +465,8 @@ def evasion_forms(text: str) -> list[str]:
             forms.append(candidate)
 
     _add(deleet(text))
+    _add(strip_combining_marks(text))
+    _add(strip_combining_marks(deleet(text)))
     _add(decompose_spaced_runs(text))
     _add(decompose_space_separated(text))
     _add(decompose_space_separated(deleet(text)))
