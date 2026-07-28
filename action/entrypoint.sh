@@ -47,6 +47,16 @@ if [[ -n "${RULE_PACK}" ]]; then
   cmd+=(--rule-pack "${RULE_PACK}")
 fi
 
+# Prove the report path is writable BEFORE running the scan. Otherwise bash
+# fails to open the redirect, ward never executes at all, and $? is 1 - which
+# maps to VERDICT=warn and exits 0. The step goes green having scanned
+# nothing, which is the one outcome this action must never produce.
+mkdir -p "$(dirname "${OUTPUT}")" 2>/dev/null || true
+if ! : >"${OUTPUT}" 2>/dev/null; then
+  echo "::error::Cannot write the Ward report to '${OUTPUT}'. Failing closed."
+  exit 2
+fi
+
 # Capture stdout but preserve the exit code (pipefail handles upstream).
 set +e
 "${cmd[@]}" >"${OUTPUT}"

@@ -102,8 +102,10 @@ This is the most useful contribution, and it has a fixed shape.
 - One logical change per PR. A new rule plus its two fixtures is one change.
 - Write commit messages in the imperative: "Add rule for X", not "Added".
 - Add an entry to [CHANGELOG.md](CHANGELOG.md) under `## [Unreleased]`.
-- CI will post a bench-diff comment on your PR showing what your change did
-  to recall and FPR. Read it.
+- CI reports what your change did to recall and FPR. For a branch on this
+  repo that arrives as a sticky PR comment; from a fork it is in the
+  `bench-diff` job log and the uploaded artifact, because a fork's token
+  cannot comment. Either way, read it.
 
 Note that Ward scans its own repository in CI, and this file is scanned as
 documentation. If you need to write out an attack string in prose, the

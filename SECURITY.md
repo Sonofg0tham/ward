@@ -19,12 +19,22 @@ Snyk's "Clinejection" issue-title attack against Cline.
   titles, PR descriptions, code comments, and Markdown content.
 - Role-manipulation tokens such as `<|im_start|>system`, fake tool-call
   syntax, and Anthropic / Cursor / Antigravity-specific role markers.
-- Obfuscation patterns: invisible characters (the whole Unicode Cf
-  category plus variation selectors - zero-width spaces, SOFT HYPHEN, the
-  LRM/RLM bidi marks Trojan Source uses, RTL override U+202E), Unicode
-  TAG-block smuggling (U+E0000-U+E007F, invisible to humans but readable by
-  tokenisers - rule `obf.unicode_tag`), long base64 blocks in unusual
-  fields, and hex-encoded payloads.
+- Obfuscation patterns. Two distinct behaviours here, worth separating:
+  - **Stripped before matching** (so none of them can split a payload):
+    every Unicode Cf codepoint and every variation selector. A payload
+    written `ig<U+00AD>nore all previous instructions` is read as
+    `ignore all previous instructions` whichever invisible character is
+    used.
+  - **Reported as a finding**: a named subset only - zero-width spaces,
+    SOFT HYPHEN, word joiner, the invisible maths operators, the bidi
+    embedding / override / isolate controls (including RTL override
+    U+202E), and the Unicode TAG block (U+E0000-U+E007F, invisible to
+    humans but readable by tokenisers - rule `obf.unicode_tag`).
+    Deliberately **not** reported: U+200E / U+200F (the LRM/RLM directional
+    marks) and the variation selectors, because those appear in ordinary
+    Arabic and Hebrew prose and in every coloured emoji. Reporting them
+    turned innocent documents into hard build failures.
+- Long base64 blocks in unusual fields, and hex-encoded payloads.
 - Tool-call injection: fake JSON tool-call objects and MCP-style URIs in
   free-form text.
 - Exfiltration prompts that instruct an agent to POST data to a URL or
@@ -152,6 +162,9 @@ Ward is pre-1.0. Only the latest minor version receives security fixes.
 
 ## Telemetry
 
-Ward sends no telemetry. It does not phone home, does not collect anonymous
-usage statistics, and makes no outbound network requests except those you
-explicitly trigger (for example `ward scan-pr`, which calls the GitHub API).
+Ward sends no telemetry. It does not phone home and does not collect anonymous
+usage statistics. It makes outbound requests on exactly three paths, each only
+when you explicitly invoke it: `ward scan-pr` (api.github.com),
+`ward bench --download` (huggingface.co and raw.githubusercontent.com), and
+the optional `[judge]` extra (your configured LLM provider). A default scan
+makes no network calls at all.

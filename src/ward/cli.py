@@ -141,6 +141,47 @@ def _read_stdin_text() -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def _read_text_file(path: Path) -> str | None:
+    """Read a tracked file as text, detecting the common UTF encodings.
+
+    Returns None only when the bytes cannot be read at all, so the caller can
+    report a file it failed to scan rather than skipping it silently.
+
+    Decoding UTF-8 with ``errors="replace"`` looks safe but is not: a UTF-16
+    document is mostly NUL bytes, so every real character survives as U+FFFD
+    and the payload scans completely clean with no signal that anything was
+    missed. Windows editors still write UTF-16 markdown, and a BOM is a
+    two-byte give-away that costs nothing to check.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    for bom, encoding in (
+        (b"\xff\xfe\x00\x00", "utf-32-le"),
+        (b"\x00\x00\xfe\xff", "utf-32-be"),
+        (b"\xff\xfe", "utf-16-le"),
+        (b"\xfe\xff", "utf-16-be"),
+        (b"\xef\xbb\xbf", "utf-8-sig"),
+    ):
+        if raw.startswith(bom):
+            try:
+                # lstrip the BOM: decoding utf-16-le leaves it as a literal
+                # U+FEFF, which is in the zero-width set - so every legitimate
+                # UTF-16 document would report obf.zero_width on its own BOM.
+                return raw.decode(encoding, errors="replace").lstrip("﻿")
+            except (UnicodeError, LookupError):  # pragma: no cover - defensive
+                break
+    # No BOM. A high proportion of NUL bytes still means a UTF-16 file, which
+    # is exactly the shape that survives a UTF-8 decode as pure U+FFFD.
+    if raw[:4096].count(0) > len(raw[:4096]) // 4:
+        for encoding in ("utf-16-le", "utf-16-be"):
+            decoded = raw.decode(encoding, errors="replace")
+            if decoded.count("�") * 4 < len(decoded):
+                return decoded
+    return raw.decode("utf-8", errors="replace")
+
+
 def _load_pack(rule_pack: Path | None) -> RulePack:
     """Load a rule pack, turning a load failure into a clean exit-2.
 
@@ -396,6 +437,9 @@ def scan_local(
             err=True,
         )
         ignore_patterns = ()
+    # A file we could not read is a file we did not scan. Silently skipping it
+    # would report PASS over a gap of unknown size.
+    unreadable: list[str] = []
     for path in walk_tracked_files(repo):
         suffix = path.suffix.lower()
         relname = str(path.relative_to(repo))
@@ -406,9 +450,9 @@ def scan_local(
         if is_ignored(relname, ignore_patterns):
             continue
         if suffix in DOC_SUFFIXES:
-            try:
-                content = path.read_text(encoding="utf-8", errors="replace")
-            except OSError:
+            content = _read_text_file(path)
+            if content is None:
+                unreadable.append(relname)
                 continue
             inputs.append(
                 build_input(
@@ -419,9 +463,9 @@ def scan_local(
                 )
             )
         elif suffix in CODE_SUFFIXES:
-            try:
-                content = path.read_text(encoding="utf-8", errors="replace")
-            except OSError:
+            content = _read_text_file(path)
+            if content is None:
+                unreadable.append(relname)
                 continue
             # Top-of-file comments only - cheap, high signal.
             top = "\n".join(content.splitlines()[:40])
@@ -439,6 +483,15 @@ def scan_local(
         fail_on=fail_on,
         rule_pack=rule_pack,
     )
+    if unreadable:
+        shown = ", ".join(unreadable[:5])
+        more = f" (+{len(unreadable) - 5} more)" if len(unreadable) > 5 else ""
+        typer.echo(
+            f"Could not read {len(unreadable)} tracked file(s): {shown}{more}\n"
+            "Those files were NOT scanned. Refusing to report a partial scan as clean.",
+            err=True,
+        )
+        code = max(code, 2)
     raise typer.Exit(code=code)
 
 
@@ -514,11 +567,12 @@ def judge_cmd(
     structurally misses (paraphrases, role-play, novel phrasings). The
     'anthropic' engine needs the \[judge] extra and ANTHROPIC_API_KEY; 'mock'
     is an offline keyword judge for demos and CI.
-
-    Raw docstring, and the bracket is escaped for Rich: unescaped, Rich parses
-    it as a style tag and the extra's name vanishes from --help, which is the
-    one place a user goes to find out what to install.
     """
+    # Implementation note, deliberately outside the docstring: Typer renders
+    # the docstring verbatim in `ward judge --help`, so anything written here
+    # is user-facing. The docstring is raw and the bracket is escaped because
+    # Rich otherwise parses `[judge]` as a style tag and the extra's name
+    # vanishes from the one place a user looks to find out what to install.
     from .judge import JudgeError, get_judge
 
     text = _read_stdin_text()

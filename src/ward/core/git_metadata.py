@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -121,8 +122,32 @@ def is_git_repo(cwd: Path) -> bool:
 
 
 def current_branch(cwd: Path) -> str | None:
+    """Return the checked-out branch name, resolving a detached HEAD.
+
+    ``rev-parse --abbrev-ref HEAD`` returns the literal string "HEAD" when the
+    checkout is detached, which is what ``actions/checkout`` leaves behind on a
+    ``pull_request`` event (HEAD sits on ``refs/pull/N/merge``). Scanning the
+    string "HEAD" means the real branch name is never scanned at all - so a
+    branch called ``ignore-all-previous-instructions`` sails through the one
+    surface Ward exists to check.
+    """
     out = _run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
-    return out or None
+    if out and out != "HEAD":
+        return out
+    # Detached. Try the symbolic ref, then the refs CI hands us, then a
+    # reverse lookup. Never fall back to the literal "HEAD".
+    symbolic = _run_git(["symbolic-ref", "--quiet", "--short", "HEAD"], cwd)
+    if symbolic:
+        return symbolic
+    for var in ("GITHUB_HEAD_REF", "GITHUB_REF_NAME"):
+        value = os.environ.get(var, "").strip()
+        if value and value != "HEAD":
+            return value
+    named = _run_git(["name-rev", "--name-only", "--exclude=tags/*", "HEAD"], cwd)
+    if named and named != "undefined":
+        # name-rev decorates with ~N / ^N for ancestors; keep the ref part.
+        return named.split("~")[0].split("^")[0] or None
+    return None
 
 
 def head_sha(cwd: Path) -> str | None:
@@ -131,18 +156,32 @@ def head_sha(cwd: Path) -> str | None:
 
 
 def recent_commits(cwd: Path, limit: int = 20) -> list[tuple[str, str]]:
-    """Return ``(sha, full message)`` for the last ``limit`` commits."""
-    out = _run_git(
-        ["log", f"-{limit}", "--no-color", "--pretty=format:%H%x1f%B%x1e"],
+    """Return ``(sha, full message)`` for the last ``limit`` commits.
+
+    Records are NUL-separated. U+001E was the obvious choice for a record
+    separator right up until you notice a commit message may contain it: git's
+    default cleanup preserves the byte, so an attacker who put U+001E in their
+    message split their own record in two, and the half carrying the payload
+    had no field separator and was silently dropped. NUL is the one byte git
+    guarantees cannot appear in a commit message.
+    """
+    out = _git(
+        ["log", f"-{limit}", "--no-color", "-z", "--pretty=format:%H%x1f%B"],
         cwd,
     )
-    if not out:
+    if not out.strip():
         return []
     records: list[tuple[str, str]] = []
-    for record in out.split("\x1e"):
-        record = record.strip()
-        if not record or "\x1f" not in record:
+    for record in out.split("\0"):
+        if not record.strip():
             continue
+        if "\x1f" not in record:
+            # A record we cannot parse is a commit we did not scan. Surface it
+            # rather than dropping it, so it cannot hide a payload.
+            raise GitError(
+                "could not parse a commit record from git log; refusing to "
+                "report a partial scan of the history"
+            )
         sha, body = record.split("\x1f", 1)
         records.append((sha.strip(), body.strip()))
     return records

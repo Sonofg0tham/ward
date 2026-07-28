@@ -30,9 +30,16 @@
     # possessive addressed to the agent ("ignore your command")
     - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+)?(?:your|my)\s+(?:(?:previous|prior|preceding|above|earlier|original|first|last)\s+)?(?:instructions?|prompts?|context|messages?|rules?|guidelines?|system\s+prompt|text|directions?|directives?|requests?|commands?|orders?|restrictions?|constraints?|limitations?|tasks?)'
     # high-signal nouns standing alone
-    # High-signal nouns take a demonstrative: "Ignore those instructions"
-    # is an injection in anyone's book.
-    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
+    # High-signal nouns, anywhere in a sentence - but WITHOUT a
+    # demonstrative, because "Windows users can ignore these instructions
+    # and use the installer" is ordinary documentation English.
+    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
+    # A demonstrative IS signal in a bare sentence-initial imperative -
+    # "Ignore those instructions" - which is the only shape the corpora
+    # actually contain. The leading class is bounded and horizontal-only:
+    # `\s*` after a multiline anchor eats the newline and brings back the
+    # quadratic backtracking.
+    - '(?im)^[ \t>*#-]{0,8}ignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
     # Ambiguous nouns do not: "the linter is configured to ignore these
     # rules inside generated/" is a sentence real projects write.
     - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+)*(?:directions?|commands?|orders?|rules?)\b'

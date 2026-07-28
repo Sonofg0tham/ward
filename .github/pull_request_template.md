@@ -23,6 +23,7 @@
 - [ ] Ran `ward bench --no-cache` and checked the false-positive rate is still 0.0%
 
 <!--
-CI will post a bench-diff comment showing what this change did to recall and
-FPR. If recall dropped or FPR rose, please explain the trade-off here.
+CI reports what this change did to recall and FPR - as a PR comment for
+branches on this repo, or in the bench-diff job log and artifact for forks.
+If recall dropped or FPR rose, please explain the trade-off here.
 -->

@@ -10,6 +10,7 @@ positive).
 from __future__ import annotations
 
 import json
+import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
@@ -59,6 +60,41 @@ def _iter_jsonl_resource(resource_name: str) -> Iterable[dict[str, object]]:
         yield from _iter_jsonl_path(path)
 
 
+def _cache_is_plausible(corpus: Corpus) -> bool:
+    """Reject a cached corpus smaller than the bundled sample it replaces.
+
+    The atomic download stops a *partial* write, but not a *complete but
+    wrong* file - a stubbed fetch, a hand-edited cache, or an upstream that
+    started serving a stub all produce a valid JSONL with too few rows.
+    ``is_cached()`` said yes, bench scored it, and the report labelled the
+    result "the full upstream corpora".
+
+    This is not hypothetical: a one-row spikee cache silently turned a 55.5%
+    full-corpus figure into 52.4%, which reads exactly like a detection
+    regression. A corpus advertised as the full upstream set cannot contain
+    fewer rows than the 50-row smoke sample shipped in the wheel.
+    """
+    from .download import cached_path
+
+    path = cached_path(corpus.name)
+    try:
+        cached_rows = sum(1 for line in path.open(encoding="utf-8") if line.strip())
+    except OSError:
+        return False
+    sample_rows = sum(1 for _ in _iter_jsonl_resource(corpus.sample_file))
+    if cached_rows >= sample_rows:
+        return True
+    warnings.warn(
+        f"Ignoring the cached corpus for {corpus.name}: it holds {cached_rows} row(s), "
+        f"fewer than the {sample_rows}-row bundled sample, so it cannot be the full "
+        f"upstream set. Falling back to the sample. Re-fetch with "
+        f"`ward bench --download {corpus.name}`.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    return False
+
+
 def load_rows(corpus: Corpus, *, use_cache: bool = True) -> list[tuple[str, bool]]:
     """Return ``(text, expect_detect)`` pairs for a corpus.
 
@@ -70,7 +106,7 @@ def load_rows(corpus: Corpus, *, use_cache: bool = True) -> list[tuple[str, bool
     if use_cache:
         from .download import cached_path, is_cached
 
-        if is_cached(corpus.name):
+        if is_cached(corpus.name) and _cache_is_plausible(corpus):
             source = _iter_jsonl_path(cached_path(corpus.name))
         else:
             source = _iter_jsonl_resource(corpus.sample_file)

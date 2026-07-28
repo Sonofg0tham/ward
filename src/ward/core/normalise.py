@@ -391,6 +391,17 @@ def evasion_forms(text: str) -> list[str]:
     _add(collapse_repeats(decompose_spaced_runs(deleet(text)), max_run=2))
     # Confusable + deleet, in case "1gn0r3" with Cyrillic 'і' arrives.
     _add(confusable_fold(deleet(text)))
+    # Confusable + separator/repeat. confusable_fold was only ever applied to
+    # the raw text and to the de-leeted form, never composed with the
+    # separator transforms - so "і.g.n.о.r.e all previous instructions"
+    # (Cyrillic i and o, ASCII dots) defeated both defences at once while
+    # either alone was caught. Stacking two handled transforms is the cheapest
+    # move an attacker has.
+    folded = confusable_fold(text)
+    if folded != text:
+        _add(decompose_spaced_runs(folded))
+        _add(collapse_repeats(decompose_spaced_runs(folded), max_run=1))
+        _add(collapse_repeats(decompose_spaced_runs(deleet(folded)), max_run=1))
     # Unicode TAG block decode - smuggled instructions in the U+E0000
     # range become visible ASCII again.
     _add(decode_unicode_tags(text))

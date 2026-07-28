@@ -34,7 +34,9 @@ The numbers above are current trunk; the per-release reports under
 [`benchmark/`](benchmark/) are committed at tag time, most recently
 [`benchmark/v0.2.3-smoke.md`](benchmark/v0.2.3-smoke.md) and
 [`benchmark/v0.2.3-full.md`](benchmark/v0.2.3-full.md). Every PR gets its
-own bench-diff comment via the CI workflow.
+own bench-diff comment via the CI workflow (fork PRs get it in the
+bench-diff job log and artifact instead, since a fork's token cannot
+comment).
 
 ## Why this exists
 
@@ -314,13 +316,22 @@ useful as a CI gate).
 
 ## GitHub Action
 
-Add it to a workflow in three lines:
+Add it to a workflow:
 
 ```yaml
-- uses: sonofg0tham/ward@v0.2.3
-  with:
-    fail-on: high
+permissions:
+  contents: read
+  security-events: write   # for the SARIF upload, which is on by default
+
+steps:
+  - uses: sonofg0tham/ward@v0.2.3
+    with:
+      fail-on: high
 ```
+
+`upload-sarif` defaults to `true`, and GitHub's default token is
+read-only, so the permission block is not optional. Set
+`upload-sarif: false` if you would rather not grant it.
 
 A fuller example that uploads SARIF to the GitHub Security tab:
 
@@ -543,8 +554,19 @@ vulnerability disclosure process.
 ## Telemetry
 
 Ward sends none. No phone home, no anonymous stats, no metrics
-collection. The only outbound network calls Ward ever makes are the
-GitHub API requests you explicitly trigger via `ward scan-pr`.
+collection. Nothing about your code or your findings leaves the machine.
+
+Ward makes outbound requests on exactly three paths, each only when you
+explicitly invoke it:
+
+| Command | Host |
+|---------|------|
+| `ward scan-pr` | `api.github.com` |
+| `ward bench --download` | `huggingface.co`, `raw.githubusercontent.com` |
+| `ward judge` / `--judge anthropic` (optional `[judge]` extra) | your configured LLM provider |
+
+A default scan (`scan-local`, `scan-stdin`, `scan-branch`, `scan-commit`)
+makes no network calls at all.
 
 ## Development
 

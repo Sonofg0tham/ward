@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from typer.testing import CliRunner
 
 from ward.bench import CORPORA, render_json, render_markdown, run_benchmark
@@ -252,8 +253,11 @@ def test_load_rows_no_cache_ignores_downloaded_corpus(monkeypatch, tmp_path):
     """use_cache=False must score the bundled sample even when a full
     download is cached - otherwise 'smoke' reports silently become full runs."""
     corpus = next(c for c in CORPORA if c.name == "lakera_ignore_instructions")
-    _fake_cache(monkeypatch, tmp_path, corpus.name, n_rows=3)
-    assert len(load_rows(corpus, use_cache=True)) == 3
+    # 60 rows, not 3: a cache smaller than the 50-row bundled sample is now
+    # rejected as implausible, so a tiny fake would exercise that guard rather
+    # than the cache selection this test is about.
+    _fake_cache(monkeypatch, tmp_path, corpus.name, n_rows=60)
+    assert len(load_rows(corpus, use_cache=True)) == 60
     assert len(load_rows(corpus, use_cache=False)) == 50
 
 
@@ -296,3 +300,25 @@ def test_cli_bench_no_cache_flag(monkeypatch, tmp_path):
     payload = json.loads(result.stdout)
     assert payload["corpora"][0]["source"] == "sample"
     assert payload["corpora"][0]["total"] == 50
+
+
+def test_implausibly_small_cached_corpus_is_rejected(tmp_path, monkeypatch):
+    """A cached corpus smaller than the bundled sample cannot be the full set.
+
+    The atomic download stops a partial write, but not a complete-but-wrong
+    file. A one-row cache was scored as "the full upstream corpora" and turned
+    a 55.5% figure into 52.4% - indistinguishable from a real regression.
+    """
+    from ward.bench import corpora as corpora_mod
+
+    corpus = next(c for c in corpora_mod.CORPORA if c.name == "spikee_jailbreaks")
+    stub = tmp_path / "spikee_jailbreaks.jsonl"
+    stub.write_text('{"text": "only row"}\n', encoding="utf-8")
+    monkeypatch.setattr(corpora_mod, "_iter_jsonl_path", corpora_mod._iter_jsonl_path)
+    monkeypatch.setattr("ward.bench.download.cached_path", lambda name: stub)
+    monkeypatch.setattr("ward.bench.download.is_cached", lambda name: True)
+
+    with pytest.warns(RuntimeWarning, match="cannot be the full upstream set"):
+        rows = corpora_mod.load_rows(corpus)
+    # Fell back to the 50-row bundled sample rather than scoring the stub.
+    assert len(rows) == 50, f"scored the stub instead of falling back: {len(rows)} rows"

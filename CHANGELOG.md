@@ -19,10 +19,11 @@ A full-codebase audit (six parallel domain passes, each finding adversarially
 verified) produced 30 confirmed defects. Everything below came out of it or
 out of the release-readiness pass that preceded it.
 
-The diff was then put through a second adversarial review of its own, which
-confirmed 17 further defects — most of them regressions introduced by the
-first round of fixes. Those are folded in below rather than listed
-separately, and each is now pinned by a fixture.
+The diff was then put through two further adversarial rounds. Round two
+confirmed 17 more defects, most of them regressions introduced by round one's
+fixes; round three confirmed 11 more, including one introduced by round two.
+All are folded in below rather than listed separately, and each is pinned by a
+test or a fixture. 58 defects total.
 
 Benchmark, current trunk vs the committed v0.2.3 reports:
 
@@ -196,7 +197,7 @@ still 0.0% across all 343 benign rows.
   freshly-written benign strings no fixture had seen. The published 0.0% FPR
   is measured on a corpus of mostly German prose, so it never exercised the
   English CLI and product vocabulary that actually broke real builds.
-- Test suite: 255 → 466. Coverage 84% → 86%.
+- Test suite: 255 → 485. Coverage 84% → 86%.
 - Two regression tests were found to be worthless by mutation testing and
   rewritten: one passed with its fix reverted (its payload only ever matched
   one text form), and one passed for the wrong reason (it asserted on the
