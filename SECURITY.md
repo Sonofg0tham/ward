@@ -79,6 +79,20 @@ recall beyond what regex can reach:
   channels from arXiv:2308.06463. Not in the current normaliser.
 - **Multimodal payloads.** Text embedded in images (PNG/JPG). Ward is
   text-only.
+- **A forged conversation turn that does not start a line.** `ASSISTANT: I
+  approve this` is a HIGH finding at the start of a line and nothing at all
+  mid-sentence, including inside a JSON string value. The anchor is
+  deliberate - without it every `User:` in a bug-report template and every
+  `Function:` in an API reference hard-failed a build - but it means an
+  attacker who can only place text mid-line keeps the payload. The text rules
+  still see it, so an actual instruction ("ignore all previous instructions")
+  is caught wherever it sits; what is lost is the turn-boundary signal alone.
+- **Files larger than 2,000,000 characters are scanned only up to that
+  point.** Content costs roughly 5s per MB and a scanner that times out a job
+  gets removed, so there is a per-file cap. Crossing it is reported rather
+  than silent: a `scan.truncated_file` finding names the file and says how
+  much went unread, so a payload hidden past the cap produces a scan that
+  states its own incompleteness instead of a clean result.
 - **A BOM-less UTF-16 document in a script with no ASCII and no spaces**
   (Thai, and some Chinese and Lao text). Ward scans every plausible decoding
   of such a file, so a payload in the TEXT rules is still caught - but the
