@@ -277,7 +277,7 @@ Markdown report you can paste into a blog post or PR comment:
 ```bash
 ward lab attack
 # Wrote lab report: ward-lab-report.md
-# Blocked by Ward: 5/5 scenarios.
+# Blocked by Ward: 6/6 scenarios.
 ```
 
 `ward lab attack` uses a deterministic mock and shows whether the

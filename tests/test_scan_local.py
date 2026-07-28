@@ -65,7 +65,11 @@ def test_git_metadata_helpers(dirty_repo: Path):
     assert head_sha(dirty_repo)
     commits = recent_commits(dirty_repo, limit=5)
     assert commits
-    assert "disregard" in commits[0][1].lower()
+    # (sha, author, message) - the author name is attacker-controlled and now
+    # gets its own scanned surface.
+    sha, author, message = commits[0]
+    assert sha and author
+    assert "disregard" in message.lower()
     assert tag_names(dirty_repo) == []
 
 
@@ -97,7 +101,7 @@ def test_recent_commits_survives_unicode(unicode_commit_repo: Path):
     assert commits
     # The Cyrillic override should be readable and, run through the engine,
     # would trip the ru rule. We only assert we did not crash and got text.
-    assert "игнорируй" in commits[0][1] or commits[0][1]
+    assert "игнорируй" in commits[0][2] or commits[0][2]
 
 
 def test_scan_local_survives_unicode_commit(unicode_commit_repo: Path):

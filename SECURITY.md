@@ -132,10 +132,10 @@ Measured on the full 1,391-row corpus:
 
 | Threshold | In-scope recall | FPR | Behaviour |
 |-----------|-----------------|-----|-----------|
-| `high` (default) | 53.8% | **0.0%** | blocks the build |
-| `medium` | 55.3% | 0.6% | warns only |
+| `high` (default) | 54.1% | **0.0%** | blocks the build |
+| `medium` | 56.0% | 0.6% | warns only |
 
-The ambiguous class is worth 1.5pp of recall and carries a 0.6% false-positive
+The ambiguous class is worth 1.9pp of recall and carries a 0.6% false-positive
 rate. Reporting it as a warning keeps that recall available to a human
 reviewer without ever blocking a build on a sentence about lint rules.
 

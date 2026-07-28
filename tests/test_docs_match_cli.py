@@ -63,3 +63,41 @@ def test_readme_does_not_advertise_commands_that_do_not_exist() -> None:
                 advertised.add(match.group(1))
     stale = sorted(advertised - real)
     assert not stale, f"README advertises commands that do not exist: {stale}"
+
+
+def test_explain_knows_every_rule_id_ward_can_emit() -> None:
+    """`ward explain <id>` must work for any id in Ward's own report.
+
+    Most rules come from YAML and are found automatically. Four did not:
+    obf.mixed_script, obf.unicode_tag and the two scan-integrity ids are
+    constructed in code, so they were absent from the explain table and
+    `ward explain obf.mixed_script` said "Unknown rule id" for a rule
+    SECURITY.md names by id.
+
+    The emitted ids are collected from the source rather than hand-listed,
+    so adding a new code-defined finding without documenting it fails here.
+    """
+    import re as _re
+
+    from ward.cli import _heuristic_rule_doc
+    from ward.core.rules import load_rule_pack
+
+    known = {rule.id for rule in load_rule_pack().rules}
+
+    src_root = pathlib.Path(__file__).resolve().parents[1] / "src" / "ward"
+    emitted: set[str] = set()
+    for path in src_root.rglob("*.py"):
+        for match in _re.finditer(
+            r'rule_id="([a-z_]+\.[a-z_]+)"', path.read_text(encoding="utf-8")
+        ):
+            emitted.add(match.group(1))
+
+    assert emitted, "no rule_id= literals found; the scan is not working"
+    undocumented = sorted(
+        rid for rid in emitted if rid not in known and _heuristic_rule_doc(rid, object) is None
+    )
+    assert not undocumented, (
+        f"`ward explain` does not know these ids, which Ward emits: {undocumented}. "
+        "Add them to _heuristic_rule_doc - an id in a report that explain cannot "
+        "resolve sends the reader nowhere."
+    )

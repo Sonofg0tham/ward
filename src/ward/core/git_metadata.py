@@ -171,8 +171,13 @@ def head_sha(cwd: Path) -> str | None:
     return out or None
 
 
-def recent_commits(cwd: Path, limit: int = 20) -> list[tuple[str, str]]:
-    """Return ``(sha, full message)`` for the last ``limit`` commits.
+def recent_commits(cwd: Path, limit: int = 20) -> list[tuple[str, str, str]]:
+    """Return ``(sha, author name, full message)`` for the last ``limit`` commits.
+
+    The AUTHOR NAME is attacker-controlled: ``git config user.name`` accepts
+    any string, it travels with the commit, and it lands in the PR metadata an
+    agent reads. 22 rules declare the commit_author surface and no command
+    ever built one, so it was scanned in name only.
 
     Records are NUL-separated. U+001E was the obvious choice for a record
     separator right up until you notice a commit message may contain it: git's
@@ -182,24 +187,24 @@ def recent_commits(cwd: Path, limit: int = 20) -> list[tuple[str, str]]:
     guarantees cannot appear in a commit message.
     """
     out = _git(
-        ["log", f"-{limit}", "--no-color", "-z", "--pretty=format:%H%x1f%B"],
+        ["log", f"-{limit}", "--no-color", "-z", "--pretty=format:%H%x1f%an%x1f%B"],
         cwd,
     )
     if not out.strip():
         return []
-    records: list[tuple[str, str]] = []
+    records: list[tuple[str, str, str]] = []
     for record in out.split("\0"):
         if not record.strip():
             continue
-        if "\x1f" not in record:
+        if record.count("\x1f") < 2:
             # A record we cannot parse is a commit we did not scan. Surface it
             # rather than dropping it, so it cannot hide a payload.
             raise GitError(
                 "could not parse a commit record from git log; refusing to "
                 "report a partial scan of the history"
             )
-        sha, body = record.split("\x1f", 1)
-        records.append((sha.strip(), body.strip()))
+        sha, author, body = record.split("\x1f", 2)
+        records.append((sha.strip(), author.strip(), body.strip()))
     return records
 
 

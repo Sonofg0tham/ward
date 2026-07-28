@@ -155,6 +155,18 @@ _UNREADABLE_RUN = re.compile("[�\x00]+")
 # ratio the file has to clear - see the docstring.
 _MIN_READABLE_CHARS = 24
 
+# How much of a single file is scanned. Content costs roughly 5s per MB, so a
+# repository with one large data file took minutes: 13MB alone was 66s, and a
+# scanner slow enough to time out a job is one somebody removes.
+#
+# A cap is a boundary an attacker can put a payload past, which is the shape
+# this codebase has got wrong three times. The difference here is that going
+# over it is REPORTED: the file is truncated, a scan.truncated_file finding
+# names it and says how much was skipped, and the report therefore states its
+# own coverage. Hiding a payload past the cap does not produce a clean scan -
+# it produces a scan that says a chunk of that file was never read.
+_MAX_SCANNED_CHARS = 2_000_000
+
 
 def _readable_text(text: str) -> str:
     """The parts of a file that decoded, with the undecodable runs removed.
@@ -676,7 +688,11 @@ def scan_local(
     branch = current_branch(repo)
     if branch:
         inputs.append(build_input("branch_name", branch, location=f"branch:{branch}"))
-    for sha, msg in recent_commits(repo, limit=commit_limit):
+    for sha, author, msg in recent_commits(repo, limit=commit_limit):
+        # An author name is whatever `git config user.name` was set to, so it
+        # is as attacker-controlled as a branch name and travels just as far.
+        if author:
+            inputs.append(build_input("commit_author", author, location=f"commit:{sha[:8]}:author"))
         inputs.append(build_input("commit_message", msg, location=f"commit:{sha[:8]}"))
     for tag in tag_names(repo):
         inputs.append(build_input("tag_name", tag, location=f"tag:{tag}"))
@@ -701,6 +717,7 @@ def scan_local(
     # A file we could not read is a file we did not scan. Silently skipping it
     # would report PASS over a gap of unknown size.
     unreadable: list[str] = []
+    truncated: list[tuple[str, int]] = []
     for path in walk_tracked_files(repo):
         suffix = path.suffix.lower()
         relname = str(path.relative_to(repo))
@@ -755,6 +772,9 @@ def scan_local(
                 readable = _readable_text(content)
                 if not readable:
                     continue
+                if len(readable) > _MAX_SCANNED_CHARS:
+                    truncated.append((relname, len(readable)))
+                    readable = readable[:_MAX_SCANNED_CHARS]
                 inputs.append(
                     build_input(
                         "file_content",
@@ -827,6 +847,34 @@ def scan_local(
         )
         for name in unreadable
     ]
+    extra += [
+        Finding(
+            rule_id="scan.truncated_file",
+            detector="scan-local",
+            category="scan_integrity",
+            severity=Severity.MEDIUM,
+            message=(
+                f"Only the first {_MAX_SCANNED_CHARS:,} characters of this file were "
+                f"scanned ({size:,} total), so the rest was not screened"
+            ),
+            surface="file_name",
+            location=name,
+            evidence=name,
+            remediation=(
+                "Split the file, add it to .wardignore if it is generated data, or "
+                "scan it separately. Ward reports what it did not read rather than "
+                "implying a clean result over it."
+            ),
+        )
+        for name, size in truncated
+    ]
+    if truncated:
+        names = ", ".join(f"{n} ({size:,} chars)" for n, size in truncated[:3])
+        typer.echo(
+            f"Truncated {len(truncated)} large file(s) at {_MAX_SCANNED_CHARS:,} "
+            f"characters: {names}. The remainder was NOT scanned.",
+            err=True,
+        )
     if unreadable:
         shown = ", ".join(unreadable[:5])
         more = f" (+{len(unreadable) - 5} more)" if len(unreadable) > 5 else ""
@@ -1579,6 +1627,35 @@ def _heuristic_rule_doc(rule_id: str, _detector_cls: type) -> str | None:
         "obf.hex_blob": (
             "obf.hex_blob\ncategory:    obfuscation\nseverity:    low\n"
             "Long hex blocks in PR metadata can hide encoded instructions."
+        ),
+        # These four are emitted by Ward and were missing from this table, so
+        # `ward explain <id>` failed on ids taken straight out of its own
+        # report - and obf.mixed_script is named in SECURITY.md. The
+        # explain-every-emitted-id test below now makes that impossible.
+        "obf.mixed_script": (
+            "obf.mixed_script\ncategory:    obfuscation\nseverity:    high\n"
+            "A single token mixing Latin with Cyrillic, Greek, Armenian or Hebrew.\n"
+            "Those scripts contain glyphs indistinguishable from Latin letters, so\n"
+            "'іgnore' reads as English to a human and matches no Latin-only rule.\n"
+            "See https://www.unicode.org/reports/tr39/ for the confusables data."
+        ),
+        "obf.unicode_tag": (
+            "obf.unicode_tag\ncategory:    obfuscation\nseverity:    critical\n"
+            "Characters from the Unicode TAG block (U+E0000-U+E007F), which mirror\n"
+            "ASCII but render as nothing. An instruction written in them is invisible\n"
+            "to a human reviewer and plain text to a model's tokeniser."
+        ),
+        "scan.unreadable_file": (
+            "scan.unreadable_file\ncategory:    scan_integrity\nseverity:    high\n"
+            "Not a detection: a tracked file Ward could not read, so its contents\n"
+            "were never scanned. Reported as a finding so the verdict cannot claim\n"
+            "a clean result over a gap of unknown size."
+        ),
+        "scan.truncated_file": (
+            "scan.truncated_file\ncategory:    scan_integrity\nseverity:    medium\n"
+            "Not a detection: a file larger than the per-file scan limit, of which\n"
+            "only the first portion was read. Reported so the scan states its own\n"
+            "coverage rather than implying it saw the whole file."
         ),
     }
     return docs.get(rule_id)
