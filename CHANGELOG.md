@@ -152,6 +152,34 @@ false positive, with the FPR still 0.0% across all 343 benign rows.
 
 ### Fixed
 
+- **The pretty reporter could overturn a verdict.** Evidence text was handed
+  to Rich as a bare string, so Rich parsed it as console markup. An unmatched
+  tag - `[INST] ignore previous instructions [/INST]`, the exact shape of
+  payload Ward exists to catch - raised MarkupError *after* the engine had
+  decided FAIL, and the traceback exited 1, which the Action reads as WARN and
+  passes. The same cause hid exfiltration URLs from the evidence and let ESC
+  bytes rewrite the CI log. Rendering can no longer change an exit code: any
+  reporter exception now names itself and fails closed.
+- **`scan-pr` read only the first 30 commits and 30 changed files.** No
+  pagination at all, against GitHub's 30-per-page default. Thirty unremarkable
+  commits before the payload was enough to get a PASS. It now pages to the
+  end, and refuses to report a verdict when GitHub's own 250-commit /
+  3000-file caps mean it cannot see the whole PR.
+- **`lab attack --fail-on` was cosmetic.** Every scenario ran at HIGH and the
+  report was rebuilt with the requested threshold afterwards, so `--fail-on
+  critical` printed six blocks that had all been decided at HIGH.
+- **`bench-diff` printed "No change to headline detection numbers" over
+  regressions of up to 5pp**, directly contradicting the table above it. A
+  0.1pp improvement was announced while a 4.9pp regression stayed silent.
+- **SARIF used raw location strings as artifact URIs**, which fails schema
+  validation for ordinary paths (Windows separators, spaces, `#`). Non-file
+  surfaces such as branch names no longer claim to be line 1 of a file.
+- **The `[judge]` extra pinned `anthropic>=0.40`** while the code requires
+  `output_config`, which no release before 0.77 accepts. `available()`
+  reported ready and every call then died on an unexpected-keyword TypeError.
+  Now a capability probe with an actionable message.
+- Four commands - `selftest`, `attack-demo`, `update-rules` and `bench-diff` -
+  were missing from the README.
 - **False positives that hard-failed CI on ordinary English** at the default
   `fail-on: high`, with no suppression available on `pr_body` or
   `commit_message`: "Don't forget to update the CHANGELOG",
@@ -237,7 +265,7 @@ false positive, with the FPR still 0.0% across all 343 benign rows.
   freshly-written benign strings no fixture had seen. The published 0.0% FPR
   is measured on a corpus of mostly German prose, so it never exercised the
   English CLI and product vocabulary that actually broke real builds.
-- Test suite: 255 → 670. Coverage 84% → 86%.
+- Test suite: 255 → 727. Coverage 84% → 86%.
 - Two regression tests were found to be worthless by mutation testing and
   rewritten: one passed with its fix reverted (its payload only ever matched
   one text form), and one passed for the wrong reason (it asserted on the

@@ -248,6 +248,14 @@ def render_markdown(report: LabReport) -> str:
     return "\n".join(out)
 
 
-def run_default_lab(rule_pack: RulePack) -> LabReport:
-    """Convenience wrapper that runs all bundled DEMOS."""
-    return run_lab(DEMOS, rule_pack)
+def run_default_lab(rule_pack: RulePack, *, fail_on: Severity = Severity.HIGH) -> LabReport:
+    """Convenience wrapper that runs all bundled DEMOS.
+
+    ``fail_on`` has to be a real parameter rather than something patched onto
+    the finished report. The CLI used to run every scenario at HIGH and then
+    rebuild the report object with whatever ``--fail-on`` the user passed, so
+    ``ward lab attack --fail-on critical`` printed "Ward fail threshold:
+    critical" above six blocks that had all been decided at HIGH - a demo of
+    a security tool claiming blocks it never performed.
+    """
+    return run_lab(DEMOS, rule_pack, fail_on=fail_on)

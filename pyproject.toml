@@ -63,7 +63,14 @@ judge = [
   # Only needed for the optional LLM judge tier (`ward judge --engine anthropic`
   # and `ward bench --judge anthropic`). Ward's core is regex-only and has no
   # LLM dependency.
-  "anthropic>=0.40",
+  #
+  # 0.77 is the first release whose Messages.create accepts `output_config`,
+  # which anthropic_judge.py requires for structured outputs. Verified by
+  # inspecting the create() signature in each wheel, not assumed: 0.76 does
+  # not have it. The floor used to be 0.40, so an environment that already
+  # had any 0.4x-0.7x satisfied the constraint, pip declined to upgrade, and
+  # every judge call died with an unexpected-keyword TypeError.
+  "anthropic>=0.77",
 ]
 
 [project.scripts]

@@ -8,6 +8,7 @@ the actual fired findings, and one ``results`` entry per finding.
 from __future__ import annotations
 
 import json
+from urllib.parse import quote
 
 from ..core.models import Finding, ScanReport, Severity
 
@@ -49,22 +50,57 @@ def _rule_descriptor(finding: Finding) -> dict[str, object]:
     }
 
 
+# Surfaces that genuinely correspond to a file on disk. Everything else -
+# a branch name, a commit message, a PR body - is not a file, and describing
+# it with a physicalLocation asks GitHub to annotate a path that does not
+# exist. SARIF has logicalLocations for exactly this.
+_FILE_SURFACES = frozenset({"file_name", "directory_name", "file_content", "code_comment"})
+
+
+def _artifact_uri(location: str) -> str:
+    """Turn a filesystem path into a valid SARIF artifact URI.
+
+    The raw string used to go straight into ``artifactLocation.uri``, which
+    fails official schema validation for perfectly ordinary paths. On Windows
+    ``scan-local`` yields ``docs\\release notes.md``: backslashes are not path
+    separators in a URI reference, and a literal space is not permitted at
+    all. GitHub's code-scanning ingest is stricter than the CLI is, so the
+    upload step failed on repos that were otherwise scanning fine.
+    """
+    return quote(location.replace("\\", "/"), safe="/")
+
+
+def _location(finding: Finding, *, target: str) -> dict[str, object]:
+    raw = finding.location or target or "untrusted-metadata"
+    if finding.surface in _FILE_SURFACES:
+        return {
+            "physicalLocation": {
+                "artifactLocation": {"uri": _artifact_uri(raw)},
+                "region": {"startLine": 1},
+            }
+        }
+    # A branch name or PR body has no file and no line. Claiming line 1 of a
+    # file named "feat/ignore-previous-instructions" produced an annotation
+    # pointing at a path that was never in the repository.
+    return {
+        "logicalLocations": [
+            {
+                "name": raw,
+                "kind": "member",
+                "fullyQualifiedName": f"{finding.surface}:{raw}",
+            }
+        ]
+    }
+
+
 def _result(finding: Finding, *, target: str) -> dict[str, object]:
-    location_uri = finding.location or target or "untrusted-metadata"
     return {
         "ruleId": finding.rule_id,
         "level": _SARIF_LEVEL[finding.severity],
         "message": {
             "text": (f"{finding.message}\nsurface: {finding.surface}\nevidence: {finding.evidence}")
         },
-        "locations": [
-            {
-                "physicalLocation": {
-                    "artifactLocation": {"uri": location_uri},
-                    "region": {"startLine": 1},
-                }
-            }
-        ],
+        "locations": [_location(finding, target=target)],
         "properties": {
             "surface": finding.surface,
             "category": finding.category,

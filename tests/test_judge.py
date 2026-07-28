@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 
 import pytest
 from typer.testing import CliRunner
@@ -210,3 +212,75 @@ def test_verdict_dataclass_is_frozen():
     v = JudgeVerdict(is_injection=True, confidence=0.5, technique="none", reasoning="r")
     with pytest.raises(dataclasses.FrozenInstanceError):
         v.confidence = 0.9  # type: ignore[misc]
+
+
+# --- SDK capability gate -----------------------------------------------------
+#
+# available() used to check only that `import anthropic` worked and a key was
+# set. The pyproject floor was anthropic>=0.40, but classify() passes
+# `output_config`, which no release before 0.77 accepts. Messages.create is
+# generated keyword-only with no **kwargs, so an older SDK does not ignore the
+# parameter - it raises TypeError. The judge reported itself ready and then
+# every call died with "unexpected keyword argument 'output_config'".
+
+
+def test_available_is_false_when_the_sdk_cannot_do_structured_outputs(monkeypatch):
+    from ward.judge import anthropic_judge as mod
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setattr(mod, "_supports_structured_outputs", lambda: False)
+    monkeypatch.setitem(sys.modules, "anthropic", types.SimpleNamespace(__version__="0.42.0"))
+
+    judge = mod.AnthropicJudge()
+    assert judge.available() is False
+    reason = judge.unavailable_reason()
+    assert reason is not None
+    assert "0.42.0" in reason, "the reason must name the version actually installed"
+    assert "0.77" in reason, "the reason must say which version fixes it"
+
+
+def test_available_is_true_when_the_sdk_supports_structured_outputs(monkeypatch):
+    from ward.judge import anthropic_judge as mod
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setattr(mod, "_supports_structured_outputs", lambda: True)
+    monkeypatch.setitem(sys.modules, "anthropic", types.SimpleNamespace(__version__="0.77.0"))
+
+    judge = mod.AnthropicJudge()
+    assert judge.unavailable_reason() is None
+    assert judge.available() is True
+
+
+def test_a_missing_key_is_reported_as_a_missing_key(monkeypatch):
+    """Each cause must name itself, not fall back to one generic message."""
+    from ward.judge import anthropic_judge as mod
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    monkeypatch.setitem(sys.modules, "anthropic", types.SimpleNamespace(__version__="0.99.0"))
+
+    reason = mod.AnthropicJudge().unavailable_reason()
+    assert reason is not None and "ANTHROPIC_API_KEY" in reason
+    assert "too old" not in reason
+
+
+def test_the_capability_probe_reads_the_real_signature(monkeypatch):
+    """The probe must inspect create(), not just look for the module.
+
+    Substituting a stub Messages whose create() lacks output_config has to
+    make the probe say no; adding the parameter has to make it say yes.
+    """
+    from ward.judge import anthropic_judge as mod
+
+    def _install(create) -> None:
+        messages_mod = types.ModuleType("anthropic.resources.messages")
+        messages_mod.Messages = type("Messages", (), {"create": create})
+        monkeypatch.setitem(sys.modules, "anthropic", types.ModuleType("anthropic"))
+        monkeypatch.setitem(sys.modules, "anthropic.resources", types.ModuleType("a.resources"))
+        monkeypatch.setitem(sys.modules, "anthropic.resources.messages", messages_mod)
+
+    _install(lambda self, *, model, max_tokens, messages: None)
+    assert mod._supports_structured_outputs() is False
+
+    _install(lambda self, *, model, max_tokens, messages, output_config=None: None)
+    assert mod._supports_structured_outputs() is True

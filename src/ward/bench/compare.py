@@ -10,6 +10,17 @@ import json
 from pathlib import Path
 from typing import Any
 
+# A movement big enough to be worth a warning that says "investigate before
+# merging", and one big enough to be worth mentioning at all. The gap between
+# them used to be silence: anything under 5pp produced no verdict line, and
+# the summary then claimed there had been no change.
+#
+# _NOTICEABLE is 0.1pp rather than 0, because floating-point recall over a few
+# hundred rows wobbles in the last decimal place and a diff that shouts about
+# 0.0001pp is one nobody reads.
+_LOUD = 0.05
+_NOTICEABLE = 0.001
+
 
 def _load(path: str | Path) -> dict[str, Any]:
     with open(path, encoding="utf-8") as fh:
@@ -101,27 +112,40 @@ def render_diff(base_report: dict[str, Any], new_report: dict[str, Any]) -> str:
 
     if recall_known:
         assert base_recall is not None and new_recall is not None  # narrowing
-        if new_recall < base_recall - 0.05:
+        if new_recall < base_recall - _LOUD:
             verdicts.append(
                 f"⚠️ **Recall regression**: down {_delta_pp(new_recall, base_recall)} "
                 "from the base. Investigate before merging."
             )
-        elif new_recall > base_recall + 0.001:
+        elif new_recall < base_recall - _NOTICEABLE:
+            verdicts.append(f"↘️ Recall down {_delta_pp(new_recall, base_recall)} from the base.")
+        elif new_recall > base_recall + _NOTICEABLE:
             verdicts.append(f"✅ Recall improved by {_delta_pp(new_recall, base_recall)}.")
     else:
         verdicts.append("_Recall not comparable: zero in-scope rows scored in one report._")
 
     if fpr_known:
         assert base_fpr is not None and new_fpr is not None  # narrowing
-        if new_fpr > base_fpr + 0.05:
+        if new_fpr > base_fpr + _LOUD:
             verdicts.append(
                 f"⚠️ **False-positive regression**: up {_delta_pp(new_fpr, base_fpr)} "
                 "from the base. Investigate before merging."
             )
+        elif new_fpr > base_fpr + _NOTICEABLE:
+            verdicts.append(f"↗️ False positives up {_delta_pp(new_fpr, base_fpr)} from the base.")
+        elif new_fpr < base_fpr - _NOTICEABLE:
+            verdicts.append(f"✅ False positives down {_delta_pp(base_fpr, new_fpr)}.")
     else:
         verdicts.append("_FPR not comparable: zero benign rows scored in one report._")
 
-    if recall_known and fpr_known and len(verdicts) == 0:
+    # "No change" is a claim about the numbers, so only make it when the
+    # numbers actually did not change. It used to print whenever nothing
+    # crossed the 5pp warning threshold, which meant a report could show
+    # "-4.9pp" in the table and "No change to headline detection numbers"
+    # immediately underneath it. A reader who trusts the summary line over
+    # the table - which is the entire point of having a summary line - merged
+    # a real regression.
+    if recall_known and fpr_known and not verdicts:
         verdicts.append("_No change to headline detection numbers on the bundled samples._")
     lines.extend(verdicts)
     return "\n".join(lines)

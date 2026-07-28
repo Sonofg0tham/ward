@@ -352,3 +352,85 @@ def test_source_label_matches_the_rows_actually_scored(monkeypatch, tmp_path):
         report = run_benchmark([corpus], use_cache=True)
     assert report.results[0].source == "sample", "guard-rejected cache still labelled full"
     assert report.results[0].total == 50
+
+
+# --- the summary line must not contradict the table above it -----------------
+
+
+def test_a_sub_threshold_regression_is_not_reported_as_no_change():
+    """The exact case that made this a bug worth fixing.
+
+    Recall down 4.9pp and FPR up 4.9pp both sat just under the 5pp warning
+    threshold, so neither produced a verdict - and the summary then printed
+    "No change to headline detection numbers" directly beneath a table
+    showing both movements. A reader who trusts the summary over the table,
+    which is the whole reason a summary exists, merged a real regression.
+    """
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.780, 0.0, {}), _sample_report(0.731, 0.049, {}))
+    assert "No change" not in body, "a 4.9pp movement was reported as no change"
+    assert "-4.9pp" in body
+    assert "+4.9pp" in body
+
+
+def test_no_change_is_only_claimed_when_nothing_changed():
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.780, 0.01, {}), _sample_report(0.780, 0.01, {}))
+    assert "No change to headline detection numbers" in body
+
+
+def test_small_regressions_are_reported_as_readily_as_small_improvements():
+    """The two directions used to be wildly asymmetric.
+
+    A 0.1pp improvement was announced; a 4.9pp regression was silent. For a
+    tool whose entire purpose is catching silent detection regressions, the
+    asymmetry pointed the wrong way.
+    """
+    from ward.bench.compare import render_diff
+
+    up = render_diff(_sample_report(0.700, 0.0, {}), _sample_report(0.705, 0.0, {}))
+    down = render_diff(_sample_report(0.705, 0.0, {}), _sample_report(0.700, 0.0, {}))
+    assert "No change" not in up
+    assert "No change" not in down, (
+        "a regression the same size as a reported improvement was reported as no change"
+    )
+
+
+def test_a_large_regression_still_says_investigate_before_merging():
+    """The quiet note must not have replaced the loud warning."""
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.80, 0.0, {}), _sample_report(0.60, 0.0, {}))
+    assert "Recall regression" in body
+    assert "Investigate before merging" in body
+
+
+def test_a_large_false_positive_rise_still_says_investigate_before_merging():
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.80, 0.0, {}), _sample_report(0.80, 0.20, {}))
+    assert "False-positive regression" in body
+    assert "Investigate before merging" in body
+
+
+def test_a_small_false_positive_rise_on_its_own_is_reported():
+    """FPR needs its own case, not one riding on a recall change.
+
+    The sub-threshold test moves both metrics, so the recall note alone kept
+    "No change" away and the FPR branch was never exercised. Mutation testing
+    caught it: disabling the small-FPR branch broke nothing.
+    """
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.80, 0.00, {}), _sample_report(0.80, 0.04, {}))
+    assert "No change" not in body, "a 4pp rise in false positives was reported as no change"
+    assert "+4.0pp" in body
+
+
+def test_a_small_false_positive_drop_on_its_own_is_reported():
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.80, 0.04, {}), _sample_report(0.80, 0.00, {}))
+    assert "No change" not in body

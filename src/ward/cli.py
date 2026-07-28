@@ -739,13 +739,18 @@ def judge_cmd(
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
-    if not judge.available():
-        typer.echo(
-            f"Judge '{engine}' is not available. For 'anthropic', install the extra "
-            'and set an API key:\n    pip install "ward-scanner[judge]"\n'
-            "    export ANTHROPIC_API_KEY=sk-...",
-            err=True,
+    # Ask the judge WHY it cannot run where it can tell us. The generic
+    # message sent people to install an extra they already had: the real
+    # cause was often an SDK too old for structured outputs, which produced
+    # an unreadable "unexpected keyword argument 'output_config'" instead.
+    reason = getattr(judge, "unavailable_reason", lambda: None)()
+    if reason or not judge.available():
+        detail = reason or (
+            "For 'anthropic', install the extra and set an API key:\n"
+            '    pip install "ward-scanner[judge]"\n'
+            "    export ANTHROPIC_API_KEY=sk-..."
         )
+        typer.echo(f"Judge '{engine}' is not available: {detail}", err=True)
         raise typer.Exit(code=2)
     try:
         verdict = judge.classify(text)
@@ -1314,9 +1319,13 @@ def lab_attack(
 
     pack = _load_pack(rule_pack)
     sev_fail = _parse_severity(fail_on, flag="--fail-on")
-    report = run_default_lab(pack)
-    # Re-render fail-on into the report (run_default_lab uses HIGH; respect the CLI choice).
-    report = type(report)(runs=report.runs, fail_on=sev_fail, generated_at=report.generated_at)
+    # --fail-on has to reach the scan itself. This used to run every scenario
+    # at HIGH and then rebuild the report object with the requested threshold,
+    # which changed only the number printed in the heading: `lab attack
+    # --fail-on critical` reported "Ward fail threshold: critical" above six
+    # blocks that had all been decided at HIGH. A demo of a security tool is
+    # the last place that should claim results it did not produce.
+    report = run_default_lab(pack, fail_on=sev_fail)
     markdown = render_markdown(report)
     if no_write:
         typer.echo(markdown)
