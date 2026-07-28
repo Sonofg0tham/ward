@@ -146,6 +146,34 @@ _CONFUSABLE_FOLD = str.maketrans(
         "ρ": "p",  # U+03C1
         "τ": "t",  # U+03C4
         "υ": "u",  # U+03C5
+        # Latin small capitals (U+1D00 block). A complete lookalike
+        # alphabet, and it was missing entirely - so a payload written in
+        # small caps read as English to a human and matched nothing, while
+        # every other homoglyph form was caught.
+        "ᴀ": "a",
+        "ʙ": "b",
+        "ᴄ": "c",
+        "ᴅ": "d",
+        "ᴇ": "e",
+        "ꜰ": "f",
+        "ɢ": "g",
+        "ʜ": "h",
+        "ɪ": "i",
+        "ᴊ": "j",
+        "ᴋ": "k",
+        "ʟ": "l",
+        "ᴍ": "m",
+        "ɴ": "n",
+        "ᴏ": "o",
+        "ᴘ": "p",
+        "ǫ": "q",
+        "ʀ": "r",
+        "ᴛ": "t",
+        "ᴜ": "u",
+        "ᴠ": "v",
+        "ᴡ": "w",
+        "ʏ": "y",
+        "ᴢ": "z",
         # Greek uppercase
         "Α": "A",
         "Β": "B",
@@ -503,6 +531,13 @@ def evasion_forms(text: str) -> list[str]:
 # payload full of these is prose, not a hash - and identifier surfaces force
 # an attacker to use them, because git forbids spaces in ref names.
 _WORD_SEPARATORS = frozenset(" \t\n\r-_.,:;/+")
+# Unicode spaces count too. A payload joined by NO-BREAK SPACE or
+# IDEOGRAPHIC SPACE has word boundaries a reader can see and none this
+# gate could, so it was discarded as a hash.
+_WORD_SEPARATORS |= frozenset(
+    "\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007"
+    "\u2008\u2009\u200a\u202f\u205f\u3000"
+)
 
 
 def _looks_like_text(s: str) -> bool:

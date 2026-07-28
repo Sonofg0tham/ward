@@ -59,7 +59,7 @@ Benchmark, current trunk vs the committed v0.2.3 reports:
 | | v0.2.3 | now |
 |---|---|---|
 | Smoke (50-row samples) | 75.2% recall, 0.0% FPR | 75.2% recall, 0.0% FPR |
-| Full corpus, blocking (`fail-on: high`) | 53.5% recall, 0.0% FPR | **54.1%** recall, 0.0% FPR |
+| Full corpus, blocking (`fail-on: high`) | 53.5% recall, 0.0% FPR | **54.0%** recall, 0.0% FPR |
 | Full corpus, reporting (`fail-on: medium`) | — | **56.0%** recall, 0.6% FPR |
 
 So the rule work is a net detection *gain* on the real corpora — 567 of the
