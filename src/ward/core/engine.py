@@ -223,10 +223,18 @@ def scan_inputs(
     target: str,
     fail_on: Severity = Severity.HIGH,
     threshold: Severity = Severity.LOW,
+    extra_findings: tuple[Finding, ...] = (),
 ) -> ScanReport:
+    """Scan ``inputs`` and aggregate a verdict.
+
+    ``extra_findings`` are findings the CALLER produced - currently only
+    "this tracked file could not be read". They go through aggregation like
+    any other, so the verdict in the report and the process exit code cannot
+    disagree about the same run.
+    """
     detectors = [cls(rule_pack) for cls in ALL_DETECTOR_CLASSES]
     _check_every_rule_runs(rule_pack, detectors)
-    findings: list[Finding] = []
+    findings: list[Finding] = list(extra_findings)
     for source in inputs:
         for detector in detectors:
             for finding in detector.scan(source):

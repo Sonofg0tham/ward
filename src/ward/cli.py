@@ -38,7 +38,7 @@ from .core.git_metadata import (
     walk_tracked_files,
 )
 from .core.github_api import GitHubError, fetch_pr_metadata, parse_pr_ref
-from .core.models import ScanInput, ScanReport, Severity, Surface
+from .core.models import Finding, ScanInput, ScanReport, Severity, Surface
 from .core.rules import RulePack, RulePackError, load_rule_pack
 from .core.wardignore import is_ignored, load_patterns
 from .reporters import render_json, render_pretty, render_sarif
@@ -142,6 +142,21 @@ def _read_stdin_text() -> str:
         return str(sys.stdin.read())
     raw: bytes = buffer.read()
     return raw.decode("utf-8", errors="replace")
+
+
+def _looks_like_text_file(text: str) -> bool:
+    """Is this file worth scanning as prose, judged by its bytes?
+
+    Used for files whose suffix is in neither allow-list. A compiled binary
+    or an image is not a text-injection vector, but the decision has to come
+    from looking at the content - an allow-list of extensions is what let a
+    payload sit in `Dockerfile` or `AGENTS` and report PASS.
+    """
+    if not text:
+        return False
+    sample = text[:4096]
+    printable = sum(1 for ch in sample if ch.isprintable() or ch in "\n\r\t")
+    return printable / len(sample) >= 0.85
 
 
 def _strip_format_chars(text: str) -> str:
@@ -402,6 +417,7 @@ def _run(
     threshold: str,
     fail_on: str,
     rule_pack: Path | None,
+    extra_findings: tuple[Finding, ...] = (),
 ) -> int:
     pack: RulePack = _load_pack(rule_pack)
     sev_threshold = _parse_severity(threshold, flag="--severity-threshold")
@@ -412,6 +428,7 @@ def _run(
         target=target,
         fail_on=sev_fail,
         threshold=sev_threshold,
+        extra_findings=extra_findings,
     )
     return _emit(report, fmt=fmt, console=Console())
 
@@ -646,7 +663,36 @@ def scan_local(
                         suppress_rules=None if idx == readings.primary else ("obf.*",),
                     )
                 )
-        elif suffix in CODE_SUFFIXES:
+        elif suffix not in CODE_SUFFIXES:
+            # NO SUFFIX, OR ONE NOBODY LISTED. Both lists are allow-lists, so
+            # anything outside them had its CONTENT skipped entirely and only
+            # its name scanned - a repo whose payload sat in `Dockerfile`,
+            # `Makefile`, `AGENTS`, `INSTRUCTIONS`, `notes` or `data.json`
+            # reported PASS. Extensionless files are the worst of it: AGENTS
+            # and INSTRUCTIONS are exactly the filenames a coding agent is
+            # pointed at, and they carry no suffix by convention.
+            #
+            # Treated as documentation content rather than skipped. A file
+            # that does not read as text is not a text-injection vector, so it
+            # is passed over - but the decision is made by LOOKING at the
+            # bytes rather than by trusting the extension.
+            readings = _read_text_file(path)
+            if readings is None:
+                unreadable.append(relname)
+                continue
+            if not _looks_like_text_file(readings.texts[readings.primary]):
+                continue
+            for idx, content in enumerate(readings.texts):
+                inputs.append(
+                    build_input(
+                        "file_content",
+                        content,
+                        location=relname,
+                        trust_suppressions=_trusts_suppressions(relname),
+                        suppress_rules=None if idx == readings.primary else ("obf.*",),
+                    )
+                )
+        else:
             readings = _read_text_file(path)
             if readings is None:
                 unreadable.append(relname)
@@ -663,18 +709,48 @@ def scan_local(
                     )
                 )
 
+    # Scanning nothing is not the same as finding nothing. A repository with
+    # no commits printed a confident PASS, which in CI is indistinguishable
+    # from a clean run.
+    #
+    # The test is "were any FILES scanned", not "are there any inputs": a
+    # branch name exists even in a repository with no commits at all, so an
+    # empty-inputs check never fired and the first version of this guard was
+    # dead code that looked like a fix.
+    if not any(inp.surface == "file_name" for inp in inputs):
+        typer.echo(
+            f"No scannable content found in {repo}. Nothing was scanned, so this "
+            "is not a clean result - check the path, the branch, and .wardignore.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
     target = f"local:{repo}"
     head = head_sha(repo)
     if head:
         target += f"@{head[:8]}"
-    code = _run(
-        inputs,
-        target=target,
-        fmt=fmt,
-        threshold=threshold,
-        fail_on=fail_on,
-        rule_pack=rule_pack,
-    )
+    # Reported BEFORE the scan runs, and as a finding rather than a note
+    # printed afterwards. Escalating the exit code after _emit left the JSON
+    # and SARIF documents saying verdict "pass" while the process exited 2,
+    # so an automated consumer reading the report and a human reading the
+    # exit code got opposite answers about the same run.
+    extra: list[Finding] = [
+        Finding(
+            rule_id="scan.unreadable_file",
+            detector="scan-local",
+            category="scan_integrity",
+            severity=Severity.HIGH,
+            message="Tracked file could not be read, so its contents were not scanned",
+            surface="file_name",
+            location=name,
+            evidence=name,
+            remediation=(
+                "Check permissions and re-run. Ward will not report a scan as "
+                "clean over a gap of unknown size."
+            ),
+        )
+        for name in unreadable
+    ]
     if unreadable:
         shown = ", ".join(unreadable[:5])
         more = f" (+{len(unreadable) - 5} more)" if len(unreadable) > 5 else ""
@@ -683,7 +759,15 @@ def scan_local(
             "Those files were NOT scanned. Refusing to report a partial scan as clean.",
             err=True,
         )
-        code = max(code, 2)
+    code = _run(
+        inputs,
+        target=target,
+        fmt=fmt,
+        threshold=threshold,
+        fail_on=fail_on,
+        rule_pack=rule_pack,
+        extra_findings=tuple(extra),
+    )
     raise typer.Exit(code=code)
 
 
