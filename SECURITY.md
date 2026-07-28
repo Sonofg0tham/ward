@@ -79,6 +79,15 @@ recall beyond what regex can reach:
   channels from arXiv:2308.06463. Not in the current normaliser.
 - **Multimodal payloads.** Text embedded in images (PNG/JPG). Ward is
   text-only.
+- **A BOM-less UTF-16 document in a script with no ASCII and no spaces**
+  (Thai, and some Chinese and Lao text). Ward scans every plausible decoding
+  of such a file, so a payload in the TEXT rules is still caught - but the
+  character-level `obf.*` rules run only on the reading Ward judges most
+  likely to be the document, and for these scripts that judgement can go the
+  wrong way. Ranking readings is inherently approximate; a wrong choice costs
+  an obfuscation finding, never the payload text itself. Pinned as a strict
+  xfail in `tests/test_fail_closed.py` so it cannot be quietly "fixed" by a
+  change that only appears to work.
 - **Indirect injection through retrieved content** (RAG vector stores,
   external web pages, runtime memory). Ward only scans repo-resident text
   and GitHub event metadata.

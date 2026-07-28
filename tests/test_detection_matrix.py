@@ -481,3 +481,24 @@ def test_demand_before_the_noun_still_blocks(pack, surface: str, text: str):
 def test_widening_did_not_re_break_docs_prose(pack, surface: str, text: str):
     report = scan_inputs([build_input(surface, text, location="t")], pack, target="t")
     assert report.exit_code != 2, f"documentation prose blocked: {text!r}"
+
+
+# --- round nine: the demand must be an imperative --------------------------
+# The reverse-order pattern accepted ANY occurrence of an action verb, so
+# "The linter will print a warning and ignore directives it cannot parse"
+# blocked a build. A verb with a subject in front of it is a description; a
+# bare imperative is a demand.
+
+ROUND_NINE_PROSE = [
+    "The linter will print a warning and ignore directives it cannot parse.",
+    "Tests that run in CI ignore instructions marked as manual.",
+    "You can run the installer and ignore the instructions in the README.",
+    "The server will return 404 and ignore directives in the header.",
+    "This flag makes the runner output verbose logs and ignore instructions in skipped tests.",
+]
+
+
+@pytest.mark.parametrize("text", ROUND_NINE_PROSE)
+def test_a_described_action_is_not_a_demand(pack, text: str):
+    report = scan_inputs([build_input("pr_body", text, location="t")], pack, target="t")
+    assert report.exit_code != 2, f"described action blocked the build: {text!r}"

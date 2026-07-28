@@ -237,7 +237,7 @@ false positive, with the FPR still 0.0% across all 343 benign rows.
   freshly-written benign strings no fixture had seen. The published 0.0% FPR
   is measured on a corpus of mostly German prose, so it never exercised the
   English CLI and product vocabulary that actually broke real builds.
-- Test suite: 255 → 662. Coverage 84% → 86%.
+- Test suite: 255 → 670. Coverage 84% → 86%.
 - Two regression tests were found to be worthless by mutation testing and
   rewritten: one passed with its fix reverted (its payload only ever matched
   one text form), and one passed for the wrong reason (it asserted on the

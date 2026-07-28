@@ -256,8 +256,14 @@ def _read_text_file(path: Path) -> _Readings | None:
     # The cost is decoding a file up to three times; the wrong readings are
     # CJK noise that matches no English rule.
     text8 = raw.decode("utf-8", errors="replace")
-    if b"\x00" not in raw:
-        # Valid UTF-8 text does not contain NUL. Nothing to reinterpret.
+    # Reinterpret unless the UTF-8 reading is CLEAN. Gating on NUL alone was
+    # wrong: a UTF-16 document written in a script with no ASCII component -
+    # Chinese, Thai - contains no NUL byte at all, so the alternate readings
+    # were never considered and its payload was invisible. That was the real
+    # cause of the "non-Latin UTF-16 loses" bug, not the scoring, and several
+    # attempts at re-tuning the score could never have fixed it. A broken
+    # UTF-8 decode is the signal that matters, and it costs nothing to check.
+    if b"\x00" not in raw and text8.count("�") * 20 < max(1, len(text8)):
         return _Readings(texts=[text8], primary=0)
     candidates = [text8]
     for encoding in ("utf-16-le", "utf-16-be"):
