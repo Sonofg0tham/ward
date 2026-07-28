@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from ward.cli import app
+from ward.cli import _read_text_file, app
 from ward.core.engine import build_input, scan_inputs
 from ward.core.rules import load_rule_pack
 
@@ -318,12 +318,27 @@ def test_utf16_document_is_scanned_not_silently_mangled(git_repo: Path):
     assert result.exit_code == 2, "UTF-16 payload scanned clean"
 
 
-def test_utf16_byte_order_mark_is_not_itself_a_finding(git_repo: Path):
+def test_utf16_byte_order_mark_is_not_itself_a_finding(git_repo: Path, tmp_path: Path):
     """Decoding utf-16-le leaves the BOM as a literal U+FEFF, which is in the
-    zero-width set - so every legitimate UTF-16 document would self-report."""
-    (git_repo / "CLEAN.md").write_text(
-        "# Release notes\n\nThe installer now supports silent mode.\n", encoding="utf-16"
-    )
+    zero-width set - so every legitimate UTF-16 document would self-report.
+
+    Asserting only "the scan passed" made this a no-op: before UTF-16 was
+    handled at all, the file decoded to U+FFFD garbage that likewise contains
+    no BOM and no payload, so the test passed against the unfixed code. The
+    claim has to be that the content was decoded CORRECTLY and carries no
+    stray BOM.
+    """
+    text = "# Release notes\n\nThe installer now supports silent mode.\n"
+    doc = tmp_path / "CLEAN.md"
+    # write_bytes, not write_text: on Windows the text path translates \n to
+    # \r\n and the assertion would be about newlines rather than the BOM.
+    doc.write_bytes(text.encode("utf-16"))
+
+    decoded = _read_text_file(doc)
+    assert decoded == text, f"UTF-16 not decoded faithfully: {decoded!r}"
+    assert "﻿" not in decoded, "BOM survived into the scanned text"
+
+    (git_repo / "CLEAN.md").write_bytes(doc.read_bytes())
     _git(git_repo, "add", "-A")
     _git(git_repo, "commit", "-qm", "add")
     result = runner.invoke(app, ["scan-local", "--repo", str(git_repo), "--format", "json"])
@@ -344,3 +359,58 @@ def test_confusable_stacked_with_separators(pack, text: str):
     with the separator transforms, so stacking two handled evasions - the
     cheapest move an attacker has - defeated both at once."""
     assert verdict(pack, "pr_body", text) == "fail"
+
+
+def test_a_deleted_tracked_file_does_not_block_the_scan(git_repo: Path):
+    """git lists a tracked file that has been removed from the working tree.
+
+    That is a deletion, not a scan gap - it happens on every uncommitted `rm`,
+    every rebase in progress, every sparse checkout. Treating it as an
+    unreadable file exited 2 and blocked the build on an ordinary repo state.
+    """
+    (git_repo / "README.md").write_text("# readme\n", encoding="utf-8")
+    (git_repo / "NOTES.md").write_text("notes\n", encoding="utf-8")
+    _git(git_repo, "add", "-A")
+    _git(git_repo, "commit", "-qm", "add")
+    (git_repo / "NOTES.md").unlink()
+    result = runner.invoke(app, ["scan-local", "--repo", str(git_repo), "--format", "json"])
+    assert result.exit_code == 0, f"a deleted tracked file blocked the scan: {result.output}"
+
+
+def test_a_genuinely_unreadable_file_still_forces_exit_2(git_repo: Path, monkeypatch):
+    """The deletion carve-out must not swallow a real read failure."""
+    (git_repo / "LOCKED.md").write_text("hello\n", encoding="utf-8")
+    _git(git_repo, "add", "-A")
+    _git(git_repo, "commit", "-qm", "add")
+
+    import ward.cli as cli_mod
+
+    original = cli_mod._read_text_file
+    monkeypatch.setattr(
+        cli_mod,
+        "_read_text_file",
+        lambda p: None if p.name == "LOCKED.md" else original(p),
+    )
+    result = runner.invoke(app, ["scan-local", "--repo", str(git_repo), "--format", "json"])
+    assert result.exit_code == 2
+    assert "Could not read" in result.output
+
+
+def test_utf16_without_a_bom_is_still_detected(git_repo: Path, tmp_path: Path):
+    """Windows editors write BOM-less UTF-16 too.
+
+    Without the NUL-ratio sniff this decodes as UTF-8 into pure U+FFFD - a
+    file that scans clean while carrying a payload, with no signal at all.
+    """
+    doc = tmp_path / "NOBOM.md"
+    doc.write_bytes(("# Notes\n\n" + PAYLOAD + "\n").encode("utf-16-le"))
+    assert not doc.read_bytes().startswith((b"\xff\xfe", b"\xfe\xff")), "test wrote a BOM"
+
+    decoded = _read_text_file(doc)
+    assert PAYLOAD in decoded, f"BOM-less UTF-16 not decoded: {decoded[:60]!r}"
+
+    (git_repo / "NOBOM.md").write_bytes(doc.read_bytes())
+    _git(git_repo, "add", "-A")
+    _git(git_repo, "commit", "-qm", "add")
+    result = runner.invoke(app, ["scan-local", "--repo", str(git_repo), "--format", "json"])
+    assert result.exit_code == 2, "BOM-less UTF-16 payload scanned clean"

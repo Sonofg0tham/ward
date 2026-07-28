@@ -144,8 +144,13 @@ def _read_stdin_text() -> str:
 def _read_text_file(path: Path) -> str | None:
     """Read a tracked file as text, detecting the common UTF encodings.
 
-    Returns None only when the bytes cannot be read at all, so the caller can
-    report a file it failed to scan rather than skipping it silently.
+    Returns None only when the file exists but its bytes cannot be read, so
+    the caller can report a genuine scan gap. A path that simply is not there
+    returns "" instead: git lists a tracked file that has been deleted from
+    the working tree, which happens constantly (an uncommitted ``rm``, a
+    rebase in progress, a sparse checkout). Treating that as an unreadable
+    file blocked the build on a completely ordinary repo state - and a gate
+    that fails on valid input is how a gate gets switched off.
 
     Decoding UTF-8 with ``errors="replace"`` looks safe but is not: a UTF-16
     document is mostly NUL bytes, so every real character survives as U+FFFD
@@ -155,6 +160,12 @@ def _read_text_file(path: Path) -> str | None:
     """
     try:
         raw = path.read_bytes()
+    except FileNotFoundError:
+        # Tracked but not on disk: a deletion, not a gap. Nothing to scan.
+        return ""
+    except IsADirectoryError:
+        # A submodule gitlink, or a path that became a directory. Not content.
+        return ""
     except OSError:
         return None
     for bom, encoding in (

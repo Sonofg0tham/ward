@@ -19,11 +19,16 @@ A full-codebase audit (six parallel domain passes, each finding adversarially
 verified) produced 30 confirmed defects. Everything below came out of it or
 out of the release-readiness pass that preceded it.
 
-The diff was then put through two further adversarial rounds. Round two
+The diff was then put through three further adversarial rounds. Round two
 confirmed 17 more defects, most of them regressions introduced by round one's
-fixes; round three confirmed 11 more, including one introduced by round two.
-All are folded in below rather than listed separately, and each is pinned by a
-test or a fixture. 58 defects total.
+fixes; round three confirmed 11 more, including one introduced by round two;
+round four found 3 more, again including one introduced by round three. All
+are folded in below rather than listed separately, and each is pinned by a
+test or a fixture. 61 defects total.
+
+Round four also mutation-tested every test added by rounds two and three: one
+passed with its fix reverted and has been rewritten, and a gap in the
+BOM-less UTF-16 path had no coverage at all.
 
 Benchmark, current trunk vs the committed v0.2.3 reports:
 
@@ -145,6 +150,16 @@ still 0.0% across all 343 benign rows.
   find out what to install.
 - `bench-diff` and `lab review` crashed with `UnicodeEncodeError` on Windows
   on exactly the branches that report a regression or a compromised reviewer.
+- A tracked file deleted from the working tree - an uncommitted `rm`, a rebase
+  in progress, a sparse checkout - was treated as an unreadable file and
+  exited 2, blocking the build on an entirely ordinary repo state. A gate that
+  fails on valid input is as damaging as one that passes invalid input.
+- `{"tool": "formatter", "arguments": {...}}` in a documented config block
+  fired `tool.fake_json_tool_call` at HIGH. A bare `"tool"` key is not part of
+  either the OpenAI or the Anthropic tool-call schema; it is ordinary config
+  vocabulary. Narrowing it cost zero corpus rows.
+- A demonstrative payload behind more than eight characters of markdown
+  nesting escaped the line-anchored form; the bounded prefix class is now 24.
 - Typographic apostrophes (U+2019 and friends) now fold to ASCII in
   `normalise_text`. macOS and iOS default to smart quotes, so "Don't forget
   your API key" reached Ward in two spellings and only one was guarded.
@@ -197,7 +212,7 @@ still 0.0% across all 343 benign rows.
   freshly-written benign strings no fixture had seen. The published 0.0% FPR
   is measured on a corpus of mostly German prose, so it never exercised the
   English CLI and product vocabulary that actually broke real builds.
-- Test suite: 255 → 485. Coverage 84% → 86%.
+- Test suite: 255 → 488. Coverage 84% → 86%.
 - Two regression tests were found to be worthless by mutation testing and
   rewritten: one passed with its fix reverted (its payload only ever matched
   one text form), and one passed for the wrong reason (it asserted on the

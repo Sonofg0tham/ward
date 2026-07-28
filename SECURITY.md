@@ -83,6 +83,27 @@ recall beyond what regex can reach:
   external web pages, runtime memory). Ward only scans repo-resident text
   and GitHub event metadata.
 
+#### Known false positives
+
+Measured by sweeping 126 hand-written benign strings drawn from real software
+vocabulary (conventional commits, branch names, config snippets, docs prose,
+six non-English languages). Two survive, and both are kept deliberately:
+
+- **"expose / print / reveal *the* system prompt"** fires `io.reveal_instructions`
+  at HIGH. `feat: expose the system prompt in the playground` is a normal
+  commit in an LLM product, but the same phrasing is a prompt-extraction
+  attack, and regex cannot see the difference. Narrowing it to require a
+  possessive would lose 74 rows of corpus recall (~5pp), so the finding
+  stays. Suppress per-file with `ward-allow-file: io.reveal_instructions`,
+  or lower it with `--severity-threshold`.
+- **A line beginning `STOP.`** fires `io.stop_and_restart` at MEDIUM. That is
+  WARN, not FAIL, so it does not block a build.
+
+The published 0.0% false-positive rate is measured on deepset, which is
+largely German prose and contains no English CLI or product vocabulary. It
+does not exercise this class at all. `tests/test_detection_matrix.py` exists
+to cover the gap.
+
 #### Operational caveats
 
 - The `ward-allow-file` directive is honoured wherever it appears in a

@@ -20,7 +20,12 @@
   severity: high
   description: "JSON object that mimics an OpenAI / Anthropic tool-call schema"
   patterns:
-    - '(?is)\{\s*"(?:tool_name|tool|function|name)"\s*:\s*"[a-zA-Z_][a-zA-Z0-9_\-]*"\s*,\s*"(?:arguments|parameters|input)"\s*:'
+    # A bare "tool" key is deliberately NOT here. It is not a key in either the
+    # OpenAI or the Anthropic tool-call schema, but it is ordinary config
+    # vocabulary - `{"tool": "formatter", "arguments": {"indent": 2}}` in a
+    # documented config block was a HIGH finding that failed the build.
+    # "name" stays: it IS the OpenAI function-call key.
+    - '(?is)\{\s*"(?:tool_name|function_name|function|name)"\s*:\s*"[a-zA-Z_][a-zA-Z0-9_\-]*"\s*,\s*"(?:arguments|parameters|input)"\s*:'
     - '(?is)\{\s*"type"\s*:\s*"tool_use"\s*,'
   surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
   remediation: "Reject."
