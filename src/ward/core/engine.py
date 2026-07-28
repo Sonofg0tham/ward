@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from fnmatch import fnmatchcase
 
 from ..detectors import ALL_DETECTOR_CLASSES
+from ..detectors.base import Detector
 from .models import Finding, ScanInput, ScanReport, Severity, Surface
 from .normalise import (
     decode_candidates,
@@ -157,6 +158,41 @@ def _is_suppressed(rule_id: str, globs: frozenset[str]) -> bool:
     return any(fnmatchcase(rule_id, glob) for glob in globs)
 
 
+class UnknownCategoryError(ValueError):
+    """A rule declares a category no detector will ever run."""
+
+
+def check_rule_categories(rule_pack: RulePack) -> None:
+    """Public entry point for the orphan-rule check. Raises on a bad pack."""
+    _check_every_rule_runs(rule_pack, [cls(rule_pack) for cls in ALL_DETECTOR_CLASSES])
+
+
+def _check_every_rule_runs(rule_pack: RulePack, detectors: Sequence[Detector]) -> None:
+    """Refuse a pack containing rules that nothing will execute.
+
+    Detectors select their rules with ``by_category``, which returns an empty
+    tuple for a category no detector claims. So a custom rule whose category
+    is misspelled - ``instruction-override`` for ``instruction_override``, one
+    hyphen - loaded without complaint, matched nothing, and Ward reported PASS.
+
+    The author had written a CRITICAL rule, watched it install cleanly, and
+    got a green tick on the exact payload it was written to catch. That is the
+    worst way for a security tool to fail, so it is an error rather than a
+    warning: a rule that cannot run is indistinguishable from no rule at all,
+    and the whole point of a custom pack is that someone is relying on it.
+    """
+    known = {d.category for d in detectors}
+    orphans = sorted({r.id: r.category for r in rule_pack.rules if r.category not in known}.items())
+    if not orphans:
+        return
+    listed = ", ".join(f"{rule_id} (category {category!r})" for rule_id, category in orphans)
+    raise UnknownCategoryError(
+        f"{len(orphans)} rule(s) declare a category no detector runs, so they would "
+        f"never fire and the scan would report PASS regardless of the input: {listed}. "
+        f"Known categories: {', '.join(sorted(known))}."
+    )
+
+
 def scan_inputs(
     inputs: Iterable[ScanInput],
     rule_pack: RulePack,
@@ -166,6 +202,7 @@ def scan_inputs(
     threshold: Severity = Severity.LOW,
 ) -> ScanReport:
     detectors = [cls(rule_pack) for cls in ALL_DETECTOR_CLASSES]
+    _check_every_rule_runs(rule_pack, detectors)
     findings: list[Finding] = []
     for source in inputs:
         for detector in detectors:

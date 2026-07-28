@@ -21,7 +21,7 @@ from rich.table import Table
 from rich.text import Text
 
 from . import __version__
-from .core.engine import build_input, scan_inputs
+from .core.engine import UnknownCategoryError, build_input, check_rule_categories, scan_inputs
 from .core.git_metadata import (
     CODE_SUFFIXES,
     DOC_SUFFIXES,
@@ -311,10 +311,17 @@ def _load_pack(rule_pack: Path | None) -> RulePack:
     pass.
     """
     try:
-        return load_rule_pack(rule_pack)
-    except RulePackError as exc:
+        pack = load_rule_pack(rule_pack)
+        # A rule whose category no detector claims loads without complaint and
+        # then never runs, so the scan reports PASS whatever the input. Checked
+        # here as well as in scan_inputs because UnknownCategoryError reaching
+        # the interpreter exits 1 - WARN to the Action - which is the very
+        # failure mode being guarded against.
+        check_rule_categories(pack)
+    except (RulePackError, UnknownCategoryError) as exc:
         typer.echo(f"Rule pack error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
+    return pack
 
 
 def _rate(value: float | None) -> str:

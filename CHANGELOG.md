@@ -59,12 +59,18 @@ Benchmark, current trunk vs the committed v0.2.3 reports:
 | | v0.2.3 | now |
 |---|---|---|
 | Smoke (50-row samples) | 75.2% recall, 0.0% FPR | 75.2% recall, 0.0% FPR |
-| Full corpus, blocking (`fail-on: high`) | 53.5% recall, 0.0% FPR | **53.5%** recall, 0.0% FPR |
-| Full corpus, reporting (`fail-on: medium`) | — | **55.3%** recall, 0.6% FPR |
+| Full corpus, blocking (`fail-on: high`) | 53.5% recall, 0.0% FPR | **54.2%** recall, 0.0% FPR |
+| Full corpus, reporting (`fail-on: medium`) | — | **56.1%** recall, 0.6% FPR |
 
-So the rule work is a net detection *gain* on the real corpora — 19 more
-injection rows caught — while removing thirteen classes of build-blocking
-false positive, with the FPR still 0.0% across all 343 benign rows.
+So the rule work is a net detection *gain* on the real corpora — 26 more
+injection rows caught at the blocking threshold — while removing eighteen
+classes of build-blocking false positive, with the FPR still 0.0% across all
+343 benign rows.
+
+These figures are re-measured, not carried forward. The README previously
+claimed 55.5% full-corpus recall, which no run reproduced: nobody had re-run
+the benchmark after the rule work, so the headline number in a detection
+tool's README was wrong, and wrong in the flattering direction.
 
 ### Security
 
