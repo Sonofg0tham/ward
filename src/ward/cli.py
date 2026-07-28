@@ -183,47 +183,33 @@ def _read_text_file(path: Path) -> str | None:
                 return raw.decode(encoding, errors="replace").lstrip("﻿")
             except (UnicodeError, LookupError):  # pragma: no cover - defensive
                 break
-    # No BOM. Decide on where the NUL bytes SIT, not how many there are.
+    # No BOM. Do NOT try to pick one encoding - scan every plausible reading.
     #
-    # Byte density alone failed twice. A UTF-16 document with a non-Latin
-    # preamble (Japanese, Cyrillic, emoji) has few NULs, so a density test
-    # let a payload through behind ~1000 CJK characters. And picking the
-    # first encoding whose U+FFFD count is low always picked utf-16-le,
-    # because byte-swapped ASCII decodes to valid CJK codepoints with no
-    # replacement characters at all - so the utf-16-be branch was
-    # unreachable and a BE file decoded to plausible-looking garbage.
+    # Three heuristics were tried here and all three were defeated, each in a
+    # different way: byte density lost to a non-Latin preamble, scoring by
+    # U+FFFD always chose little-endian (byte-swapped ASCII decodes to
+    # perfectly valid CJK), and an absolute NUL floor let sixteen bytes of
+    # padding hide a twenty-kilobyte file. Every one was a fail-open, and the
+    # pattern is clear: any rule that picks a single winner is a rule an
+    # attacker can lose on purpose.
     #
-    # NUL position is decisive for any text with an ASCII component: in
-    # UTF-16-LE the ASCII byte comes first and the NUL second (odd offsets),
-    # in UTF-16-BE the other way round.
+    # So concatenate the readings instead. A payload cannot hide in an
+    # encoding Ward declined to consider, because Ward considers all of them.
+    # The cost is decoding a file up to three times; the wrong readings are
+    # CJK noise that matches no English rule.
     text8 = raw.decode("utf-8", errors="replace")
-    if not raw:
+    if b"\x00" not in raw:
+        # Valid UTF-8 text does not contain NUL. Nothing to reinterpret.
         return text8
-    # Trigger on the QUALITY of the UTF-8 decode, not on byte density. A
-    # UTF-16 document with a long non-Latin preamble has very few NUL bytes,
-    # so a density test let a payload through behind ~1000 CJK characters.
-    # Real UTF-8 text does not contain NUL and is not mostly U+FFFD.
-    looks_broken = "\x00" in text8 or text8.count("�") * 10 > len(text8)
-    if looks_broken:
-        head = raw[:4096]
-        even_nuls = sum(1 for i in range(0, len(head) - 1, 2) if head[i] == 0)
-        odd_nuls = sum(1 for i in range(1, len(head), 2) if head[i] == 0)
-        # NUL POSITION names the endianness, and is the only thing that can:
-        # byte-swapped ASCII decodes to valid CJK with no replacement
-        # characters at all, so scoring U+FFFD always picked LE and the BE
-        # branch was unreachable. In UTF-16-LE the ASCII byte leads and the
-        # NUL trails (odd offsets); in UTF-16-BE the reverse.
-        # The floor matters: a UTF-8 file with ONE stray NUL is not UTF-16,
-        # and treating it as such mangled ordinary text into CJK garbage that
-        # then scanned clean. Real UTF-16 with any ASCII component has many
-        # NULs, and they sit almost entirely on one parity.
-        dominant, other = max(even_nuls, odd_nuls), min(even_nuls, odd_nuls)
-        if dominant >= 8 and other * 4 < dominant:
-            encoding = "utf-16-be" if even_nuls > odd_nuls else "utf-16-le"
-            decoded = raw.decode(encoding, errors="replace")
-            if decoded.count("�") * 10 <= len(decoded):
-                return decoded
-    return text8
+    readings = [text8]
+    for encoding in ("utf-16-le", "utf-16-be"):
+        try:
+            alt = raw.decode(encoding, errors="replace")
+        except (UnicodeError, LookupError):  # pragma: no cover - defensive
+            continue
+        if alt and alt not in readings:
+            readings.append(alt)
+    return "\n".join(readings)
 
 
 def _load_pack(rule_pack: Path | None) -> RulePack:

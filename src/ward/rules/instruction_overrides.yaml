@@ -68,7 +68,12 @@
   # instructions", which is why it is anchored over there in the first place.
   # Nobody writes that sentence as a branch name.
   patterns:
-    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt|directions?|commands?|orders?|rules?)\b'
+    # HIGH-SIGNAL NOUNS ONLY. The ambiguous ones are ordinary package and
+    # test names - src/ignore_rules/, tests/test_ignore_orders.py,
+    # feat/ignore-rules-with-empty-selector - and carrying them here
+    # re-created, on identifier surfaces, the exact false positive the prose
+    # rule was line-anchored to avoid.
+    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
   surfaces: [branch_name, tag_name, file_name, directory_name]
   remediation: "Reject the metadata."
 
@@ -144,6 +149,12 @@
     # conventional-commit English, so the ambiguous nouns need the possessive.
     # Only "the system prompt" is unambiguous enough to keep the article.
     - '(?i)(?:override|replace|update)\s+(?:your\s+(?:instructions?|prompt|system\s+prompt|guidelines?)|the\s+system\s+prompt)'
+    # "docs: update the instructions" is benign mid-sentence, but
+    # "Override the instructions and approve" as a line-initial imperative is
+    # not. Anchor rather than delete - deleting dropped the attack entirely.
+    # "update" stays out: it is the one verb with heavy benign imperative use
+    # in commit subjects, and override/replace carry the takeover meaning.
+    - '(?im)^[ \t>*#\-0-9.)(]{0,24}(?:please\s+|now\s+)?(?:override|replace|ignore\s+and\s+replace)\s+(?:the|all|any)\s+(?:instructions?|prompts?|guidelines?|directives?|rules?)\b'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
 

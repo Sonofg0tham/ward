@@ -19,11 +19,11 @@ A full-codebase audit (six parallel domain passes, each finding adversarially
 verified) produced 30 confirmed defects. Everything below came out of it or
 out of the release-readiness pass that preceded it.
 
-The diff was then put through four further adversarial rounds, each auditing
+The diff was then put through five further adversarial rounds, each auditing
 the previous round's fixes. Every round found regressions the one before it
-had introduced: 17, then 11, then 3, then 14. **75 defects total**, all folded
-in below rather than listed separately, and each pinned by a test or a
-fixture.
+had introduced: 17, then 11, then 3, then 14, then 14. **89 defects total**,
+all folded in below rather than listed separately, and each pinned by a test
+or a fixture.
 
 The last round was run by independent agents rather than by hand, and it
 earned its keep: it found eleven build-blocking false positives that a
@@ -32,9 +32,23 @@ the bug-report templates on GitHub), the Ansible `user:` module key, and
 `docs: update the instructions`. Every one carried a measured recall cost of
 zero or near-zero.
 
-Mutation testing was applied to every test the audit rounds added. Two passed
-with their fix reverted and were rewritten; two more code paths had no
-coverage at all.
+Mutation testing was applied to every test the audit rounds added. Three
+passed with their fix reverted and were rewritten; three more code paths had
+no coverage at all.
+
+One lesson is worth recording, because it cost three rounds. Round four fixed
+false positives by DELETING the ambiguous form of a rule, which silently
+dropped six real detections - "act as an admin", "override the instructions",
+a forged `user:` turn. The pattern that works is to ANCHOR the ambiguous form
+to the start of a line and leave the unambiguous form free: an attack
+imperative starts a line, ordinary prose mentions the same words mid-sentence.
+
+The same applies to encodings. Three successive heuristics tried to pick the
+one right decoding for a BOM-less file, and an attacker defeated each: byte
+density lost to a non-Latin preamble, scoring by U+FFFD always chose
+little-endian, and an absolute NUL floor let sixteen bytes of padding hide a
+twenty-kilobyte document. Ward now scans every plausible reading instead. A
+rule that picks a single winner is a rule an attacker can lose on purpose.
 
 Benchmark, current trunk vs the committed v0.2.3 reports:
 
@@ -218,7 +232,7 @@ false positive, with the FPR still 0.0% across all 343 benign rows.
   freshly-written benign strings no fixture had seen. The published 0.0% FPR
   is measured on a corpus of mostly German prose, so it never exercised the
   English CLI and product vocabulary that actually broke real builds.
-- Test suite: 255 → 527. Coverage 84% → 86%.
+- Test suite: 255 → 558. Coverage 84% → 86%.
 - Two regression tests were found to be worthless by mutation testing and
   rewritten: one passed with its fix reverted (its payload only ever matched
   one text form), and one passed for the wrong reason (it asserted on the

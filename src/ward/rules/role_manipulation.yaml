@@ -33,6 +33,10 @@
     # ordinary IAM and governance English - unlike "you are now an admin",
     # which is addressed to the agent and stays on line 29.
     - '(?i)act\s+as\s+(?:a|an|the)\s+(?:unrestricted|jailbroken|dan|do\s+anything\s+now)'
+    # The privileged personas are ambiguous mid-sentence (the service
+    # account will act as the owner) but unmistakable as an imperative
+    # at the start of a line, which is how the attack is written.
+    - '(?im)^[ \t>*#\-0-9.)(]{0,24}(?:please\s+|now\s+|you\s+should\s+|you\s+must\s+)?act\s+as\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|security|maintainer|owner)\b'
     - '(?i)pretend\s+(?:you\s+are|to\s+be)\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|jailbroken)'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
@@ -64,6 +68,9 @@
   description: "Markdown block masquerading as a role-delimited message"
   patterns:
     - '(?im)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*$'
+    # user/tool only at column zero. Indented, they are a YAML mapping
+    # key (the Ansible user module); unindented, a forged turn.
+    - '(?m)^(?:###?[ \t]*)?(?:user|tool|USER|TOOL|User|Tool)[ \t]*:[ \t]*$'
     - '(?i)\brole\s*:\s*(?:system|assistant|tool)\b'
   surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
   remediation: "Reject."

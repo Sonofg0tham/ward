@@ -450,6 +450,50 @@ def test_bom_less_utf16_variants_are_decoded(tmp_path: Path, label, encoding, pr
     ],
 )
 def test_utf8_files_are_not_mistaken_for_utf16(tmp_path: Path, label, raw):
+    """The UTF-8 reading must always survive.
+
+    Containment, not equality: when the bytes contain a NUL the reader
+    appends the UTF-16 interpretations rather than choosing between them, so
+    a payload cannot hide in an encoding Ward declined to consider. What
+    matters is that the real text is never replaced by a wrong reading -
+    which is what happened when a single stray NUL made the whole file
+    decode as CJK garbage.
+    """
     doc = tmp_path / "doc.md"
     doc.write_bytes(raw)
-    assert _read_text_file(doc) == raw.decode("utf-8", errors="replace"), label
+    assert raw.decode("utf-8", errors="replace") in _read_text_file(doc), label
+
+
+def test_nul_padding_cannot_hide_a_utf8_document(tmp_path: Path):
+    """Sixteen bytes of NUL padding hid a 20 KB file from the content scan.
+
+    An absolute NUL floor plus a parity test decided the whole file was
+    UTF-16 on the strength of 8 NULs in 20,000 bytes, re-decoded it into CJK
+    that cleared the U+FFFD gate, and scanned that instead. git, Python and
+    an AI reviewer all read the file as the valid UTF-8 it is; only Ward saw
+    the garbage, so the divergence ran entirely in the attacker's favour.
+    """
+    body = "filler line of ordinary markdown\n" * 400 + PAYLOAD + "\n" + "more filler\n" * 200
+    doc = tmp_path / "README.md"
+    doc.write_bytes(b"\x00A" * 8 + body.encode("utf-8"))
+    decoded = _read_text_file(doc)
+    assert PAYLOAD in decoded, "NUL padding hid the payload from the scan"
+
+
+@pytest.mark.parametrize(
+    ("label", "encoding", "preamble"),
+    [
+        # A long non-Latin preamble has almost no NUL bytes and pushes the
+        # ASCII payload past any fixed sniff window.
+        ("LE, 2100-char CJK preamble", "utf-16-le", "あ" * 2100 + "\n"),
+        ("BE, 2100-char CJK preamble", "utf-16-be", "あ" * 2100 + "\n"),
+        ("LE, emoji preamble", "utf-16-le", "😀" * 800 + "\n"),
+        ("BE, emoji preamble", "utf-16-be", "😀" * 800 + "\n"),
+    ],
+)
+def test_long_non_latin_preamble_cannot_hide_a_utf16_payload(
+    tmp_path: Path, label, encoding, preamble
+):
+    doc = tmp_path / "doc.md"
+    doc.write_bytes((preamble + PAYLOAD).encode(encoding))
+    assert PAYLOAD in _read_text_file(doc), f"{label}: payload hidden behind the preamble"

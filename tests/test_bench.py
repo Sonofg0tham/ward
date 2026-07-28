@@ -325,3 +325,30 @@ def test_implausibly_small_cached_corpus_is_rejected(tmp_path, monkeypatch):
         rows = corpora_mod.load_rows(corpus)
     # Fell back to the 50-row bundled sample rather than scoring the stub.
     assert len(rows) == 50, f"scored the stub instead of falling back: {len(rows)} rows"
+
+
+def test_source_label_matches_the_rows_actually_scored(monkeypatch, tmp_path):
+    """The label and the data must come from the same decision.
+
+    The runner used to recompute "full"/"sample" from is_cached() alone, so a
+    stub cache rejected by the plausibility guard still produced a report
+    announcing "the full upstream corpora" over 50 bundled-sample rows. This
+    had no coverage: the mutation survived the whole suite.
+    """
+    corpus = next(c for c in CORPORA if c.name == "lakera_ignore_instructions")
+
+    # Plausible cache -> "full", and the row count matches the cache.
+    _fake_cache(monkeypatch, tmp_path, corpus.name, n_rows=60)
+    report = run_benchmark([corpus], use_cache=True)
+    assert report.results[0].source == "full"
+    assert report.results[0].total == 60
+
+    # Implausible cache -> guard rejects it, so the label must say "sample"
+    # and the row count must match the bundled sample, not the stub.
+    stub_dir = tmp_path / "stub"
+    stub_dir.mkdir()
+    with pytest.warns(RuntimeWarning):
+        _fake_cache(monkeypatch, stub_dir, corpus.name, n_rows=2)
+        report = run_benchmark([corpus], use_cache=True)
+    assert report.results[0].source == "sample", "guard-rejected cache still labelled full"
+    assert report.results[0].total == 50
