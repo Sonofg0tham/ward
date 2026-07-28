@@ -151,12 +151,24 @@ def _looks_like_text_file(text: str) -> bool:
     or an image is not a text-injection vector, but the decision has to come
     from looking at the content - an allow-list of extensions is what let a
     payload sit in `Dockerfile` or `AGENTS` and report PASS.
+
+    U+FFFD IS COUNTED AGAINST THE FILE, not for it. ``str.isprintable()``
+    returns True for the replacement character, so a first version of this
+    check scored a PNG as 100% printable and scanned it as prose: the bytes
+    were undecodable, every one of them became U+FFFD, and every U+FFFD
+    counted as evidence the file was text. A repository containing an image
+    came back FAIL. The replacement character is the decoder reporting
+    failure, which is the strongest signal available that this is not text.
     """
     if not text:
         return False
     sample = text[:4096]
-    printable = sum(1 for ch in sample if ch.isprintable() or ch in "\n\r\t")
-    return printable / len(sample) >= 0.85
+    readable = sum(
+        1
+        for ch in sample
+        if (ch.isprintable() or ch in "\n\r\t") and ch != "�" and ch != "\x00"
+    )
+    return readable / len(sample) >= 0.85
 
 
 def _strip_format_chars(text: str) -> str:

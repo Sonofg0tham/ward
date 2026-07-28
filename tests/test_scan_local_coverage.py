@@ -82,18 +82,46 @@ def test_content_of_unlisted_file_types_is_scanned(tmp_path, filename: str) -> N
     assert result.returncode == 2, f"content of {filename} was never scanned"
 
 
-def test_a_binary_file_is_not_scanned_as_prose(tmp_path) -> None:
+@pytest.mark.parametrize(
+    ("name", "content"),
+    [
+        pytest.param("blob.bin", bytes(range(256)) * 40, id="raw-bytes"),
+        # A PNG is the case that actually broke. Its bytes are undecodable, so
+        # every one becomes U+FFFD - and str.isprintable() returns True for
+        # the replacement character, so the first version of the text check
+        # scored the file as 100% printable and scanned an image as prose.
+        pytest.param("image.png", b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 60, id="png"),
+        pytest.param("archive.zip", b"PK\x03\x04" + bytes(range(256)) * 20, id="zip"),
+        pytest.param("empty", b"", id="empty"),
+    ],
+)
+def test_a_binary_file_is_not_scanned_as_prose(tmp_path, name: str, content: bytes) -> None:
     """The text/binary decision comes from the bytes, not the extension.
 
-    Scanning everything indiscriminately would be the opposite failure:
-    random bytes produce nonsense findings. A file that does not read as text
-    is not a text-injection vector.
+    Scanning everything indiscriminately is the opposite failure to skipping
+    by extension: random bytes produce nonsense findings, and a file that
+    does not read as text is not a text-injection vector either way.
     """
     repo = _repo(tmp_path, {"README.md": "All clean.\n"})
-    (repo / "blob.bin").write_bytes(bytes(range(256)) * 40)
+    (repo / name).write_bytes(content)
     _git("add", "-A", cwd=repo)
     _git("commit", "-qm", "binary", cwd=repo)
-    assert _scan(repo).returncode == 0
+    assert _scan(repo).returncode == 0, f"{name} was scanned as prose"
+
+
+def test_the_text_check_does_not_count_decode_failures_as_text() -> None:
+    """Directly, because the ratio is the whole discriminator.
+
+    U+FFFD is the decoder reporting that it could not read the bytes, which
+    is the strongest available signal that a file is not text - and it was
+    being counted as evidence in the opposite direction.
+    """
+    from ward.cli import _looks_like_text_file
+
+    png = (b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 60).decode("utf-8", errors="replace")
+    assert not _looks_like_text_file(png)
+    assert _looks_like_text_file("# Notes\n\nOrdinary prose in a file with no suffix.\n")
+    assert not _looks_like_text_file("")
 
 
 def test_an_empty_repository_is_not_a_clean_result(tmp_path) -> None:
