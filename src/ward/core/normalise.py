@@ -304,8 +304,15 @@ def contains_invisible(text: str) -> list[tuple[int, str, str]]:
     return hits
 
 
+# The capture is GREEDY and BOUNDED, and the trailing whitespace is
+# horizontal-only. The previous spelling - a lazy `+?` followed by `\s*` and
+# an alternation ending in `$` - was cubic against a run of spaces: the engine
+# tries every split of the run between the capture and the `\s*`, from every
+# start position. A single line reading "# ward-allow-file:" followed by 800
+# spaces and a "-" took 0.98s; 1,600 spaces took 7.7s, and that is a 1.6KB
+# file. Trailing whitespace is stripped by the caller instead.
 _WARD_ALLOW_RE = re.compile(
-    r"(?:<!--|//|#|/\*)\s*ward-allow-file\s*:\s*([^\n\->]+?)\s*(?:-->|\*/|$)",
+    r"(?:<!--|//|#|/\*)[ \t]*ward-allow-file[ \t]*:[ \t]*([^\n\->]{1,500})(?:-->|\*/|$)",
     re.MULTILINE,
 )
 

@@ -10,7 +10,7 @@
   description: "HTML/Markdown comment containing imperative instructions"
   patterns:
     - '(?is)<!--\s*(?:ignore|disregard|forget|override|your\s+(?:new\s+)?(?:instructions?|task))'
-  surfaces: [pr_body, issue_body, file_content, code_comment, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Strip HTML comments from agent-ingested text or treat them as untrusted."
 
 - id: obf.data_uri
@@ -19,5 +19,5 @@
   description: "Data URI embedded in untrusted text"
   patterns:
     - '(?i)data:(?:text|application)/[a-z0-9.+\-]+;base64,[A-Za-z0-9+/=]{40,}'
-  surfaces: [branch_name, commit_message, pr_title, pr_body, issue_title, issue_body, file_name, code_comment, stdin]
+  surfaces: [branch_name, commit_author, commit_message, pr_title, pr_body, issue_title, issue_body, file_name, code_comment, stdin]
   remediation: "Decode and review the content before any agent ingests it."

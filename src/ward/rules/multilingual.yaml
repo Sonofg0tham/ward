@@ -22,7 +22,7 @@
   patterns:
     - '(?i)игнорир(?:уй|уйте|овать)\s+(?:все\s+|любые\s+)?предыдущ(?:ие|их)\s+(?:инструкции|указания|сообщения|правила)'
     - '(?i)заб(?:удь|удьте|ыть)\s+(?:все|всё|про\s+все)'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject. Russian instruction override is a documented evasion class for English-trained prompt filters (see Lakera and Trendyol non-English bypass research)."
 
 - id: io.es_ignore_previous
@@ -32,7 +32,7 @@
   patterns:
     - '(?i)ignor(?:a|e|en|ar)\s+(?:todas\s+las\s+|las\s+)?instrucciones\s+(?:previas|anteriores)'
     - '(?i)olvid(?:a|e|en|ar)\s+todo\s+lo\s+(?:anterior|previo)'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
 
 - id: io.fr_ignore_previous
@@ -42,7 +42,7 @@
   patterns:
     - '(?i)ignor(?:e|ez|er)\s+(?:toutes\s+les\s+|les\s+)?instructions\s+(?:précédentes|antérieures)'
     - '(?i)oubli(?:e|ez|er)\s+tout\s+ce\s+qui\s+précède'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
 
 - id: io.de_ignore_previous
@@ -52,7 +52,7 @@
   patterns:
     - '(?i)ignorier(?:e|en|t)\s+(?:alle\s+|die\s+)?(?:vorherigen?|vorangegangenen?|vorangehenden?)\s+(?:anweisungen|anleitung|anweisung|hinweise|hinweis)'
     - '(?i)vergiss\s+alles\s+(?:vorherige|bisherige|davor)'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
 
 - id: io.pt_ignore_previous
@@ -62,7 +62,7 @@
   patterns:
     - '(?i)ignor(?:e|a|em|ar)\s+(?:todas\s+as\s+|as\s+)?instru[çc][õo]es\s+(?:anteriores|pr[ée]vias)'
     - '(?i)esque[çc](?:a|am|er)\s+tudo\s+(?:o\s+que\s+)?(?:foi\s+dito|veio\s+antes|anterior)'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
 
 - id: io.zh_ignore_previous
@@ -75,7 +75,7 @@
   patterns:
     - '忽略[^\n]{0,20}?(?:指示|指令|提示|说明|规则|消息|对话|内容|系统提示)'
     - '忘记[^\n]{0,20}?(?:指示|指令|提示|内容|对话|系统提示|一切)'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
 
 - id: io.ja_ignore_previous
@@ -85,7 +85,7 @@
   patterns:
     - '(?:前の|以前の|これまでの|先ほどの)(?:指示|命令|プロンプト|ルール)(?:を|は)?(?:無視|忘れて)'
     - 'すべて(?:を)?忘れて'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
 
 - id: io.ar_ignore_previous
@@ -95,5 +95,5 @@
   patterns:
     - 'تجاهل\s+(?:جميع\s+|كل\s+|كافة\s+)?(?:التعليمات|الأوامر|الإرشادات)\s+(?:السابقة|أعلاه)'
     - 'انس(?:ى)?\s+كل\s+(?:شيء|ما)\s+سبق'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."

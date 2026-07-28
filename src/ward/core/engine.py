@@ -79,9 +79,17 @@ def build_input(
         text = ""
     normalised = normalise_text(text)
     decoded: list[str] = []
+    # A set beside the list purely for the membership test. `form not in
+    # decoded` on a list is a linear scan, and _add is called once per derived
+    # form, so building the input was quadratic in the number of forms: a
+    # 156KB PR body of distinct base64 blobs took 7.4s inside build_input
+    # alone, against 0.045s for 100KB of ordinary prose. Order still matters
+    # for evidence reporting, so the list stays.
+    seen_forms: set[str] = set()
 
     def _add(form: str) -> None:
-        if form and form != normalised and form not in decoded:
+        if form and form != normalised and form not in seen_forms:
+            seen_forms.add(form)
             decoded.append(form)
 
     # Only BLOB decodes are eligible for identifier-splitting below. A

@@ -33,6 +33,7 @@ from .core.git_metadata import (
     is_git_repo,
     recent_commits,
     ref_exists,
+    repo_prefix,
     tag_names,
     walk_tracked_files,
 )
@@ -564,12 +565,27 @@ def scan_local(
             )
             raise typer.Exit(code=2) from exc
 
+    # git reports every path relative to the REPOSITORY ROOT, while relnames
+    # here are relative to --repo. When --repo is a subdirectory the two never
+    # line up, so every "was this changed in the PR?" test answered no and
+    # both provenance gates silently opened. Prefixing closes that without
+    # giving up subdirectory scanning.
+    try:
+        prefix = repo_prefix(repo)
+    except GitError:  # pragma: no cover - is_git_repo already guarded this
+        prefix = ""
+
+    def _repo_relative(relname: str) -> str:
+        """A relname expressed the way git would report it."""
+        posix = relname.replace("\\", "/")
+        return f"{prefix}/{posix}" if prefix else posix
+
     def _trusts_suppressions(relname: str) -> bool:
         # With no base ref, every file is trusted (scanning your own checkout).
         # With a base ref, a file changed in this branch/PR is untrusted.
         if suppression_base is None:
             return True
-        return relname.replace("\\", "/") not in changed
+        return _repo_relative(relname) not in changed
 
     inputs: list[ScanInput] = []
     branch = current_branch(repo)
@@ -588,7 +604,8 @@ def scan_local(
     # filesystem (Windows, default macOS) a PR adding ".WARDIGNORE" is read by
     # load_patterns but sailed past an exact-string gate - which handed the
     # attacker back the exact bypass this check exists to close.
-    wardignore_changed = any(c.casefold() == ".wardignore" for c in changed)
+    wardignore_name = _repo_relative(".wardignore").casefold()
+    wardignore_changed = any(c.casefold() == wardignore_name for c in changed)
     if suppression_base is not None and ignore_patterns and wardignore_changed:
         typer.echo(
             ".wardignore was modified in this change; ignoring it. "

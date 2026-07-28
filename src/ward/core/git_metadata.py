@@ -121,6 +121,22 @@ def is_git_repo(cwd: Path) -> bool:
         return False
 
 
+def repo_prefix(cwd: Path) -> str:
+    """Path of ``cwd`` relative to the git root, forward-slashed, or "".
+
+    Everything git reports - ``diff --name-only``, ``ls-files`` - is relative
+    to the REPOSITORY ROOT, but ``--repo`` may point anywhere inside the tree.
+    Without this, a caller scanning a subdirectory compares "doc.md" against a
+    changed-file set containing "pkg/doc.md", nothing ever matches, and every
+    provenance gate that asks "was this file changed in the PR?" silently
+    answers no - which means trusted.
+
+    Returns "" at the root, or e.g. "pkg" / "src/app" below it.
+    """
+    prefix = _git(["rev-parse", "--show-prefix"], cwd).strip()
+    return prefix.rstrip("/")
+
+
 def current_branch(cwd: Path) -> str | None:
     """Return the checked-out branch name, resolving a detached HEAD.
 

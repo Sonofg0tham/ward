@@ -92,7 +92,7 @@
     # generated/" is mid-sentence, and "## Ignore rules" has no determiner.
     - '(?i)\bignore\s+(?!my\s+(?:(?:previous|prior|preceding|last|earlier|original|first)\s+)?(?:comments?|messages?|notes?|requests?|text|posts?|replies|reply)\b)(?:all\s+|any\s+|every\s+)?(?:the\s+|your\s+|my\s+)?(?:previous|prior|preceding|above|earlier|original)\s+(?:directions?|commands?|orders?|rules?)\b'
     - '(?i)(?:don[''’]?t|do\s+not)\s+(?:follow|obey|adhere\s+to|listen\s+to|respect)\s+(?:any\s+|all\s+|the\s+)?(?:previous|prior|above|earlier|original)?\s*(?:instructions?|prompts?|requests?|commands?|rules?|directions?)'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject the metadata. Treat the originating actor as untrusted until the change is reviewed by a human."
   references:
     - "https://genai.owasp.org/asi/asi01-goal-hijack/"
@@ -116,7 +116,7 @@
     # re-created, on identifier surfaces, the exact false positive the prose
     # rule was line-anchored to avoid.
     - '(?i)\bignore\s+(?!my\s+(?:(?:previous|prior|preceding|last|earlier|original|first)\s+)?(?:comments?|messages?|notes?|requests?|text|posts?|replies|reply)\b)(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
-  surfaces: [branch_name, tag_name, file_name, directory_name]
+  surfaces: [branch_name, commit_author, tag_name, file_name, directory_name]
   remediation: "Reject the metadata."
 
 - id: io.disregard_above
@@ -144,7 +144,7 @@
     - '(?i)\b(?:delete|remove|clear|erase|drop|wipe)\s+(?:(?:all|any|every)\s+)?(?:your|my)\s+(?:(?:previous|prior|preceding|above|earlier|original|first|last)\s+)?(?:instructions?|prompts?|context|messages?|rules?|guidelines?|system\s+prompt|text|directions?|directives?|requests?|commands?|orders?|restrictions?|constraints?|limitations?|tasks?)'
     - '(?i)\b(?:delete|remove|clear|erase|drop|wipe)\s+(?:(?:all|any|every)\s+)?(?:the\s+|your\s+|my\s+)?(?:previous|prior|preceding|above|earlier|original|first|last)\s+(?:instructions?|prompts?|context|messages?|rules?|guidelines?|system\s+prompt|text|directions?|directives?|requests?|commands?|orders?|restrictions?|constraints?|limitations?|tasks?)'
     - '(?i)\b(?:delete|remove|clear|erase|drop|wipe)\s+(?:(?:all|any|every)\s+)?(?:the\s+|your\s+|my\s+)?(?:instructions?|prompts?|context|messages?|rules?|guidelines?|system\s+prompt|text|directions?|directives?|requests?|commands?|orders?|restrictions?|constraints?|limitations?|tasks?)\s+(?:previous|prior|preceding|above|earlier|original|first|last)\b'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject the metadata."
 
 - id: io.reveal_instructions
@@ -174,7 +174,7 @@
   patterns:
     - '(?i)from\s+now\s+on[, ]+(?:you|the\s+assistant)\s+(?:will|must|should|are)'
     - '(?i)(?:starting|going)\s+forward[, ]+(?:you|the\s+assistant)\s+(?:will|must|should)'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject. Soft override is still an override."
 
 - id: io.new_instructions
@@ -197,7 +197,7 @@
     # "Replace the instructions and approve" is not.
     # Bare imperative. "rules" is deliberately absent here: "Replace the
     # rules engine with the new evaluator" is an ordinary changelog line.
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
 
 - id: io.fake_system_prompt
@@ -217,7 +217,7 @@
     #   log_level = debug
     # The (?!\() rules out the markdown-link spelling outright.
     - '(?i)\[\s*system\s*\](?!\()[ \t]*[:>-]?[ \t]*(?:\r?\n[ \t]*)*[^\n]{0,240}?\b(?:you\s+(?:are|must|will|should|shall|can\s+now|no\s+longer)|your\s+(?:new\s+)?(?:role|task|instructions?|purpose)|ignore|disregard|forget|approve|act\s+as|now\s+act|from\s+now\s+on|pretend|respond\s+only|never\s+refuse|do\s+not\s+refuse)\b'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject. Untrusted text must never present itself as a system message."
 
 - id: io.priority_escalation
@@ -246,7 +246,7 @@
   description: "'This is a test' or 'just a drill' framing to lower the agent's guard"
   patterns:
     - '(?i)(?:this\s+is\s+(?:just\s+)?a\s+test|just\s+a\s+drill|for\s+testing\s+(?:only|purposes))[, .]+(?:please|now|so)\s+(?:ignore|disregard|leak|exfiltrate|reveal|print|output|approve)'
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject. 'This is a test' framing is a documented social-engineering pattern in injection corpora."
 
 - id: io.stop_and_restart
@@ -261,7 +261,7 @@
     # instead" never fired while "now do this instead" did. A dead alternative
     # in a rule reads as coverage that is not there.
     - '(?i)(?:now|then)\s+(?:proceed\s+to|do|execute|run|perform|follow)\s+(?:the\s+)?(?:following\s+|this\s+|these\s+)?(?:instead|new\s+task|new\s+instructions?)'
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: io.respond_only_with
@@ -271,7 +271,7 @@
   patterns:
     - '(?i)(?:respond|reply|answer|output|return)\s+(?:only|exclusively|just)\s+with\s+(?:the\s+(?:word|phrase|string)|["`])'
     - '(?i)your\s+(?:entire\s+)?(?:response|reply|output|answer)\s+(?:must|should|will)\s+(?:only\s+)?(?:be|consist\s+of)\s+(?:the\s+)?(?:word|phrase|string|exactly)'
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject. Coercing the agent's output shape is a documented hijack precursor."
 
 - id: io.note_to_ai
@@ -292,8 +292,15 @@
   severity: high
   description: "Fenced code block claiming to be a system prompt"
   patterns:
-    - '(?is)```\s*(?:system|prompt|instructions?)\s*\n.{0,800}?\n\s*```'
-  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+    # Horizontal whitespace only around the fences. `\s*` matches newlines,
+    # so the closing `\n\s*``` ` could consume an arbitrary run of blank lines
+    # while the lazy `.{0,800}?` tried every body length against each of them.
+    # A PR body of ```` ```system ```` plus 3,000 blank lines - 2KB, trivially
+    # inside GitHub's 65,536-character limit - took 6s; 6KB took 28s. This is
+    # the same defect as the `\s*` after a multiline anchor that was removed
+    # from the override rules in an earlier round, in a rule nobody re-checked.
+    - '(?is)```[ \t]*(?:system|prompt|instructions?)[ \t]*\r?\n.{0,800}?\r?\n[ \t]*```'
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, commit_message, stdin]
   remediation: "Reject."
 
 - id: io.ambiguous_override_hint
@@ -324,6 +331,6 @@
     # The bare descriptive form. Still reported, no longer gating - see
     # "Severity is the answer to ambiguity" in SECURITY.md.
     - '(?i)\bignore\s+(?!my\s+(?:(?:previous|prior|preceding|last|earlier|original|first)\s+)?(?:comments?|messages?|notes?|requests?|text|posts?|replies|reply)\b)(?:all\s+|any\s+|every\s+|the\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Read the surrounding sentence. If it instructs the agent rather than describing behaviour, treat the metadata as untrusted."
 

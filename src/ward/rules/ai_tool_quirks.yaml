@@ -12,7 +12,7 @@
     - '(?i)<\s*(?:human|assistant|system)\s*>\s*(?:ignore|disregard|forget|override|your\s+new)'
     - '\\n\\nHuman:\s+(?:ignore|disregard|forget|override|your\s+new)'
     - '\\n\\nAssistant:\s+(?:i\s+will|sure,|of\s+course|here\s+are\s+the\s+secrets)'
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject. Anthropic role tags must not appear inside untrusted strings."
 
 - id: ait.cursor_command
@@ -22,7 +22,7 @@
   patterns:
     - '(?i)@codebase\s+(?:ignore|forget|disregard|leak|exfiltrate)'
     - '(?i)/(?:command|run|exec|shell)\s+(?:rm|curl|wget|nc)\b'
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: ait.antigravity_schema
@@ -32,7 +32,7 @@
   patterns:
     - '(?i)antigravity\.(?:execute|run|invoke|tool)'
     - '(?i)google\.ai\.(?:tool|function)\s*\('
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: ait.copilot_chat
@@ -41,7 +41,7 @@
   description: "GitHub Copilot Chat slash-command in unexpected place"
   patterns:
     - '(?i)/(?:terminal|new|tests?|fix|optimize)\s+(?:ignore|disregard|leak|exfiltrate)'
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: ait.claude_code_skill
@@ -50,7 +50,7 @@
   description: "Attempt to invoke a Claude Code skill from untrusted text"
   patterns:
     - '(?i)(?:invoke|use|run|call)\s+(?:the\s+)?skill\s+["`]?[a-z][a-z0-9_\-:]*["`]?\s+(?:to|and)\s+(?:leak|exfiltrate|disable|bypass|ignore)'
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: ait.aider_add
@@ -59,7 +59,7 @@
   description: "Aider /add command pointing the agent at a sensitive file"
   patterns:
     - '(?im)^[ \t]*/add\s+(?:\.env|\.git/config|\.aws/credentials|~/\.ssh/|/etc/shadow|/etc/passwd)'
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: ait.continue_dev
@@ -68,7 +68,7 @@
   description: "Continue.dev or Cline slash command embedded in text"
   patterns:
     - '(?im)^[ \t]*/(?:edit|share|terminal|cmd|run)\s+(?:rm|curl|wget|nc|cat\s+\.env)'
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: ait.mcp_tool_name_collision
@@ -78,5 +78,5 @@
   patterns:
     - '(?i)\bmcp[._]tool[._]name\s*[:=]\s*["`]?(?:filesystem|github|shell|exec|terminal|http)["`]?'
     - '(?i)\bregister[_-]?tool\s*\(\s*["`]?(?:filesystem|github|shell|exec|terminal|http)'
-  surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject. Untrusted text trying to register or shadow a tool name is an MCP-era injection signature."

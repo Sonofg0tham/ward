@@ -16,7 +16,7 @@
     - '<\|assistant\|>'
     - '<\|start_header_id\|>'
     - '<\|end_header_id\|>'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject. Tokenizer control tokens should never appear in untrusted text."
   references:
     - "https://platform.openai.com/docs/guides/text-generation/chat-completions-api"
@@ -40,7 +40,7 @@
     # Bare imperative: "Act as the root user." Mid-sentence uses like
     # "she will act as the admin while I am away" stay clean.
     - '(?i)pretend\s+(?:you\s+are|to\s+be)\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|jailbroken)'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
 
 - id: role.developer_mode
@@ -102,7 +102,7 @@
     # unrestricted, approve everything, ignore the rules. The bare form drops
     # to role.ambiguous_persona_hint at MEDIUM, which warns without blocking.
     - '(?is)\brole\s*:\s*[''"]?(?:system|assistant|tool)[''"]?\b[^\n]{0,80}\r?\n?[^\n]{0,200}?\b(?:unrestricted|no\s+restrictions|without\s+restrictions|jailbroken|approve\s+(?:all|every|any|everything)|ignore\s+(?:all\s+|any\s+|the\s+)?(?:previous|prior|safety|security)|never\s+refuse|do\s+not\s+refuse|bypass\s+(?:all\s+)?(?:safety|security|checks?)|you\s+are\s+now\s+(?:an?\s+)?(?:admin|root|superuser|unrestricted))'
-  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, commit_message, stdin]
   remediation: "Reject."
 
 - id: role.ambiguous_persona_hint
@@ -122,6 +122,6 @@
     # LLM SDK's own quickstart, so it warns rather than blocking. The
     # instruction-bearing version stays HIGH on role.fake_role_block.
     - '(?i)\brole\s*:\s*[''"]?(?:system|assistant|tool)[''"]?\b'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Read the surrounding sentence. If it tells the agent to adopt the role rather than describing a service account, treat the metadata as untrusted."
 
