@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Annotated
 
@@ -141,6 +142,14 @@ def _read_stdin_text() -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def _strip_format_chars(text: str) -> str:
+    """Drop invisible and bidi formatting characters from a derived reading.
+
+    Only ever applied to an ALTERNATE decoding, never to the text as written.
+    """
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+
+
 def _read_text_file(path: Path) -> str | None:
     """Read a tracked file as text, detecting the common UTF encodings.
 
@@ -207,6 +216,17 @@ def _read_text_file(path: Path) -> str | None:
             alt = raw.decode(encoding, errors="replace")
         except (UnicodeError, LookupError):  # pragma: no cover - defensive
             continue
+        # Strip the invisible and bidi formatting characters from the
+        # ALTERNATE readings only. "The wrong readings are CJK noise that
+        # matches no English rule" was wrong: the obfuscation detectors match
+        # CHARACTERS, not English, and re-reading ordinary ASCII as UTF-16-LE
+        # manufactures them - the pair ". " (0x2E 0x20) lands on U+202E
+        # RIGHT-TO-LEFT OVERRIDE. One NUL byte in a prose file was enough to
+        # raise a HIGH obf.bidi_override on text that contains no such
+        # character. Their presence in a re-decode is a decoding artefact,
+        # never evidence; the primary UTF-8 reading still carries the real
+        # ones, so genuine obfuscation is still reported.
+        alt = _strip_format_chars(alt)
         if alt and alt not in readings:
             readings.append(alt)
     return "\n".join(readings)

@@ -22,7 +22,7 @@
     # Advice AGAINST leaking is the opposite of the rule's intent, and
     # "Do not include API keys" is in half the bug-report templates on
     # GitHub. Same idiom the instruction-override rules already use.
-    - '(?is)(?<!not )(?<!never )(?<!avoid )(?<!n''t )(?<!dont )(?<!doesnt )(?<!wont )(?<!cant )(?<!longer )\binclude\s+(?:[^\n.]{0,60}\s+)?(?:secrets?|env(?:ironment)?\s*vars?|api\s*keys?|tokens?|credentials?|\.env|\.git/config|\.aws/credentials)'
+    - '(?is)(?<!not )(?<!never )(?<!avoid )(?<!n''t )(?<!dont )(?<!doesnt )(?<!wont )(?<!cant )(?<!longer )\binclude\s+(?:[^\n.]{0,60}\s+)?(?:secrets?|env(?:ironment)?\s*(?:vars?|variables?)\b|api\s*keys?|tokens?|credentials?|\.env|\.git/config|\.aws/credentials)'
     - '(?is)(?<!not )(?<!never )(?<!avoid )(?<!n''t )(?<!dont )(?<!doesnt )(?<!wont )(?<!cant )(?<!longer )\b(?:print|output|reveal|expose|leak|show|dump|attach)\s+(?:[^\n.]{0,60}\s+)?(?:secrets?|env(?:ironment)?\s*vars?|api\s*keys?|tokens?|credentials?|system\s+prompt|hidden\s+prompt|\.env)'
   surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."

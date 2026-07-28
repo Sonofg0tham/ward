@@ -19,11 +19,10 @@ A full-codebase audit (six parallel domain passes, each finding adversarially
 verified) produced 30 confirmed defects. Everything below came out of it or
 out of the release-readiness pass that preceded it.
 
-The diff was then put through five further adversarial rounds, each auditing
+The diff was then put through six further adversarial rounds, each auditing
 the previous round's fixes. Every round found regressions the one before it
-had introduced: 17, then 11, then 3, then 14, then 14. **89 defects total**,
-all folded in below rather than listed separately, and each pinned by a test
-or a fixture.
+had introduced: 17, 11, 3, 14, 14, 19. **111 defects total**, all folded in
+below rather than listed separately, and each pinned by a test or a fixture.
 
 The last round was run by independent agents rather than by hand, and it
 earned its keep: it found eleven build-blocking false positives that a
@@ -232,7 +231,7 @@ false positive, with the FPR still 0.0% across all 343 benign rows.
   freshly-written benign strings no fixture had seen. The published 0.0% FPR
   is measured on a corpus of mostly German prose, so it never exercised the
   English CLI and product vocabulary that actually broke real builds.
-- Test suite: 255 → 570. Coverage 84% → 86%.
+- Test suite: 255 → 600. Coverage 84% → 86%.
 - Two regression tests were found to be worthless by mutation testing and
   rewritten: one passed with its fix reverted (its payload only ever matched
   one text form), and one passed for the wrong reason (it asserted on the
