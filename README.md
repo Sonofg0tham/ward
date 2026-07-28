@@ -158,6 +158,20 @@ want through it.
 ward scan-branch  feat/ignore-previous-instructions
 ward scan-commit  HEAD
 ward explain      io.ignore_previous
+ward version
+```
+
+Ward can also check itself. `selftest` runs the built-in adversarial
+scenarios and prints the detection coverage, which is the quickest way to
+confirm an install, a custom rule pack, or a CI image is behaving:
+
+```bash
+ward selftest
+# 12/12 scenarios detected.
+
+ward attack-demo          # the same scenarios, narrated, for a demo or a talk
+ward update-rules         # pull the latest community rule pack
+ward bench-diff old.json new.json   # delta between two `ward bench --format json` runs
 ```
 
 ### Output formats
