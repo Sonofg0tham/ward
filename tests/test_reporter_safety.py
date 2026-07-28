@@ -204,3 +204,25 @@ def test_a_reporter_that_raises_on_a_clean_scan_also_fails_closed(
     monkeypatch.setattr(cli_module, "render_json", _boom)
     result = runner.invoke(app, ["scan-stdin", "--format", "json"], input="fix the typo in README")
     assert result.exit_code == 2, "a clean scan with an unrenderable report must not exit 0"
+
+
+def test_the_guard_does_not_swallow_a_deliberate_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """typer.Exit is control flow and subclasses RuntimeError.
+
+    A bare `except Exception` catches it, and it carries its own exit code -
+    so the fail-closed guard would replace a deliberate exit 7 with 2 under a
+    "could not render" message that is simply untrue. No reporter raises one
+    today; this pins the behaviour so adding one later cannot corrupt an exit
+    code, which is the exact failure class the guard exists to prevent.
+    """
+    import typer
+
+    import ward.cli as cli_module
+
+    def _deliberate(*_args: object, **_kwargs: object) -> None:
+        raise typer.Exit(code=7)
+
+    monkeypatch.setattr(cli_module, "render_json", _deliberate)
+    result = runner.invoke(app, ["scan-stdin", "--format", "json"], input=PAYLOAD)
+    assert result.exit_code == 7, "a deliberate exit code was overwritten by the guard"
+    assert "could not render" not in result.output

@@ -364,6 +364,16 @@ def _emit(
             typer.echo(render_json(report))
         else:
             typer.echo(render_sarif(report))
+    except (typer.Exit, typer.Abort, typer.BadParameter):
+        # Control flow, not failure. typer.Exit and typer.Abort subclass
+        # RuntimeError and BadParameter subclasses Exception, so a bare
+        # `except Exception` swallows all three - and typer.Exit carries its
+        # own exit code, which would then be replaced by 2 under a misleading
+        # "could not render" message. Nothing in the reporters raises one
+        # today; this is here so adding one later cannot quietly corrupt an
+        # exit code, which is the exact failure class this guard exists to
+        # prevent.
+        raise
     except Exception as exc:  # deliberately broad - see the comment above
         typer.secho(
             f"Ward could not render the {fmt_lower} report: {exc!r}\n"
