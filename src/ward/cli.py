@@ -183,14 +183,47 @@ def _read_text_file(path: Path) -> str | None:
                 return raw.decode(encoding, errors="replace").lstrip("﻿")
             except (UnicodeError, LookupError):  # pragma: no cover - defensive
                 break
-    # No BOM. A high proportion of NUL bytes still means a UTF-16 file, which
-    # is exactly the shape that survives a UTF-8 decode as pure U+FFFD.
-    if raw[:4096].count(0) > len(raw[:4096]) // 4:
-        for encoding in ("utf-16-le", "utf-16-be"):
+    # No BOM. Decide on where the NUL bytes SIT, not how many there are.
+    #
+    # Byte density alone failed twice. A UTF-16 document with a non-Latin
+    # preamble (Japanese, Cyrillic, emoji) has few NULs, so a density test
+    # let a payload through behind ~1000 CJK characters. And picking the
+    # first encoding whose U+FFFD count is low always picked utf-16-le,
+    # because byte-swapped ASCII decodes to valid CJK codepoints with no
+    # replacement characters at all - so the utf-16-be branch was
+    # unreachable and a BE file decoded to plausible-looking garbage.
+    #
+    # NUL position is decisive for any text with an ASCII component: in
+    # UTF-16-LE the ASCII byte comes first and the NUL second (odd offsets),
+    # in UTF-16-BE the other way round.
+    text8 = raw.decode("utf-8", errors="replace")
+    if not raw:
+        return text8
+    # Trigger on the QUALITY of the UTF-8 decode, not on byte density. A
+    # UTF-16 document with a long non-Latin preamble has very few NUL bytes,
+    # so a density test let a payload through behind ~1000 CJK characters.
+    # Real UTF-8 text does not contain NUL and is not mostly U+FFFD.
+    looks_broken = "\x00" in text8 or text8.count("�") * 10 > len(text8)
+    if looks_broken:
+        head = raw[:4096]
+        even_nuls = sum(1 for i in range(0, len(head) - 1, 2) if head[i] == 0)
+        odd_nuls = sum(1 for i in range(1, len(head), 2) if head[i] == 0)
+        # NUL POSITION names the endianness, and is the only thing that can:
+        # byte-swapped ASCII decodes to valid CJK with no replacement
+        # characters at all, so scoring U+FFFD always picked LE and the BE
+        # branch was unreachable. In UTF-16-LE the ASCII byte leads and the
+        # NUL trails (odd offsets); in UTF-16-BE the reverse.
+        # The floor matters: a UTF-8 file with ONE stray NUL is not UTF-16,
+        # and treating it as such mangled ordinary text into CJK garbage that
+        # then scanned clean. Real UTF-16 with any ASCII component has many
+        # NULs, and they sit almost entirely on one parity.
+        dominant, other = max(even_nuls, odd_nuls), min(even_nuls, odd_nuls)
+        if dominant >= 8 and other * 4 < dominant:
+            encoding = "utf-16-be" if even_nuls > odd_nuls else "utf-16-le"
             decoded = raw.decode(encoding, errors="replace")
-            if decoded.count("�") * 4 < len(decoded):
+            if decoded.count("�") * 10 <= len(decoded):
                 return decoded
-    return raw.decode("utf-8", errors="replace")
+    return text8
 
 
 def _load_pack(rule_pack: Path | None) -> RulePack:

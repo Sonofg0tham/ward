@@ -414,3 +414,42 @@ def test_utf16_without_a_bom_is_still_detected(git_repo: Path, tmp_path: Path):
     _git(git_repo, "commit", "-qm", "add")
     result = runner.invoke(app, ["scan-local", "--repo", str(git_repo), "--format", "json"])
     assert result.exit_code == 2, "BOM-less UTF-16 payload scanned clean"
+
+
+@pytest.mark.parametrize(
+    ("label", "encoding", "preamble"),
+    [
+        ("LE ascii", "utf-16-le", ""),
+        ("BE ascii", "utf-16-be", ""),
+        # A non-Latin preamble leaves very few NUL bytes, which defeated a
+        # density-based sniff; and byte-swapped ASCII decodes to valid CJK
+        # with no replacement characters, which made the BE branch
+        # unreachable when the choice was scored on U+FFFD.
+        ("LE with CJK preamble", "utf-16-le", "あ" * 1000 + "\n"),
+        ("BE with CJK preamble", "utf-16-be", "あ" * 1000 + "\n"),
+        ("LE with Cyrillic preamble", "utf-16-le", "Добро " * 300),
+    ],
+)
+def test_bom_less_utf16_variants_are_decoded(tmp_path: Path, label, encoding, preamble):
+    doc = tmp_path / "doc.md"
+    doc.write_bytes((preamble + PAYLOAD).encode(encoding))
+    decoded = _read_text_file(doc)
+    assert PAYLOAD in decoded, f"{label}: payload not recovered"
+
+
+@pytest.mark.parametrize(
+    ("label", "raw"),
+    [
+        ("plain ascii", b"# Release notes\n\nAll good.\n"),
+        ("utf-8 CJK", "あいう notes".encode()),
+        ("utf-8 emoji", "😀 shipped".encode()),
+        ("utf-8 accents", "café naïve".encode()),
+        # One stray NUL is not an encoding. Treating it as UTF-16 mangled
+        # ordinary text into CJK garbage, which then scanned clean.
+        ("stray NUL", b"text\x00more text here and here"),
+    ],
+)
+def test_utf8_files_are_not_mistaken_for_utf16(tmp_path: Path, label, raw):
+    doc = tmp_path / "doc.md"
+    doc.write_bytes(raw)
+    assert _read_text_file(doc) == raw.decode("utf-8", errors="replace"), label

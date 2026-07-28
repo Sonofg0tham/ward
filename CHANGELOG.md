@@ -19,27 +19,33 @@ A full-codebase audit (six parallel domain passes, each finding adversarially
 verified) produced 30 confirmed defects. Everything below came out of it or
 out of the release-readiness pass that preceded it.
 
-The diff was then put through three further adversarial rounds. Round two
-confirmed 17 more defects, most of them regressions introduced by round one's
-fixes; round three confirmed 11 more, including one introduced by round two;
-round four found 3 more, again including one introduced by round three. All
-are folded in below rather than listed separately, and each is pinned by a
-test or a fixture. 61 defects total.
+The diff was then put through four further adversarial rounds, each auditing
+the previous round's fixes. Every round found regressions the one before it
+had introduced: 17, then 11, then 3, then 14. **75 defects total**, all folded
+in below rather than listed separately, and each pinned by a test or a
+fixture.
 
-Round four also mutation-tested every test added by rounds two and three: one
-passed with its fix reverted and has been rewritten, and a gap in the
-BOM-less UTF-16 path had no coverage at all.
+The last round was run by independent agents rather than by hand, and it
+earned its keep: it found eleven build-blocking false positives that a
+hand-written sweep had missed, including `Do not include API keys` (in half
+the bug-report templates on GitHub), the Ansible `user:` module key, and
+`docs: update the instructions`. Every one carried a measured recall cost of
+zero or near-zero.
+
+Mutation testing was applied to every test the audit rounds added. Two passed
+with their fix reverted and were rewritten; two more code paths had no
+coverage at all.
 
 Benchmark, current trunk vs the committed v0.2.3 reports:
 
 | | v0.2.3 | now |
 |---|---|---|
 | Smoke (50-row samples) | 75.2% recall, 0.0% FPR | 75.2% recall, 0.0% FPR |
-| Full corpus (1,391 rows) | 53.5% recall, 0.0% FPR | **55.5%** recall, 0.0% FPR |
+| Full corpus (1,391 rows) | 53.5% recall, 0.0% FPR | **55.3%** recall, 0.0% FPR |
 
-So the rule work is a net detection *gain* on the real corpora — 21 more
-injection rows caught — while removing the false positives, with the FPR
-still 0.0% across all 343 benign rows.
+So the rule work is a net detection *gain* on the real corpora — 19 more
+injection rows caught — while removing thirteen classes of build-blocking
+false positive, with the FPR still 0.0% across all 343 benign rows.
 
 ### Security
 
@@ -212,7 +218,7 @@ still 0.0% across all 343 benign rows.
   freshly-written benign strings no fixture had seen. The published 0.0% FPR
   is measured on a corpus of mostly German prose, so it never exercised the
   English CLI and product vocabulary that actually broke real builds.
-- Test suite: 255 → 488. Coverage 84% → 86%.
+- Test suite: 255 → 527. Coverage 84% → 86%.
 - Two regression tests were found to be worthless by mutation testing and
   rewritten: one passed with its fix reverted (its payload only ever matched
   one text form), and one passed for the wrong reason (it asserted on the

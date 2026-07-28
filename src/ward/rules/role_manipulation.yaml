@@ -27,7 +27,12 @@
   description: "'You are now ...' role assignment"
   patterns:
     - '(?i)you\s+are\s+now\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|security|maintainer|owner|unrestricted|jailbroken|dan|do\s+anything\s+now)'
-    - '(?i)act\s+as\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|security|maintainer|owner|unrestricted|jailbroken|dan|do\s+anything\s+now)'
+    # "act as" keeps only the unambiguous jailbreak personas. A service
+    # account that "will act as the owner of the artifact bucket", or a doc
+    # saying someone should "act as the maintainer for this release", is
+    # ordinary IAM and governance English - unlike "you are now an admin",
+    # which is addressed to the agent and stays on line 29.
+    - '(?i)act\s+as\s+(?:a|an|the)\s+(?:unrestricted|jailbroken|dan|do\s+anything\s+now)'
     - '(?i)pretend\s+(?:you\s+are|to\s+be)\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|jailbroken)'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
@@ -58,7 +63,7 @@
   severity: high
   description: "Markdown block masquerading as a role-delimited message"
   patterns:
-    - '(?im)^[ \t]*(?:###?[ \t]*)?(?:system|assistant|user|tool)[ \t]*:[ \t]*$'
+    - '(?im)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*$'
     - '(?i)\brole\s*:\s*(?:system|assistant|tool)\b'
   surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
   remediation: "Reject."

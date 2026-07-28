@@ -85,9 +85,19 @@ recall beyond what regex can reach:
 
 #### Known false positives
 
-Measured by sweeping 126 hand-written benign strings drawn from real software
+Measured by sweeping hand-written benign strings drawn from real software
 vocabulary (conventional commits, branch names, config snippets, docs prose,
-six non-English languages). Two survive, and both are kept deliberately:
+six non-English languages) rather than by the benchmark corpora. That
+distinction matters: the published 0.0% false-positive rate is measured on
+deepset, which is largely German prose and contains **no English CLI or
+product vocabulary**, so it does not exercise this class at all. An
+independent audit round found eleven build-blocking false positives that the
+0.0% figure had never touched — including `Do not include API keys` in a
+bug-report template, the Ansible `user:` module key, and
+`docs: update the instructions`. Those are fixed and pinned in
+`tests/test_detection_matrix.py`.
+
+Two survive, and both are kept deliberately:
 
 - **"expose / print / reveal *the* system prompt"** fires `io.reveal_instructions`
   at HIGH. `feat: expose the system prompt in the playground` is a normal

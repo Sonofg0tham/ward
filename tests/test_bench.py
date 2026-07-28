@@ -235,8 +235,14 @@ def test_cli_bench_judge_unknown_engine_errors():
 # --- cache vs bundled-sample source tracking ---------------------------------
 
 
-def _fake_cache(monkeypatch, tmp_path, corpus_name: str, n_rows: int = 3):
-    """Point the download cache at a tiny fake full-corpus file."""
+def _fake_cache(monkeypatch, tmp_path, corpus_name: str, n_rows: int = 60):
+    """Point the download cache at a fake full-corpus file.
+
+    60 rows, not 3: a cache smaller than the 50-row bundled sample is now
+    rejected as implausible, so a tiny fake would silently exercise that guard
+    instead of the source labelling these tests are about. The guard itself is
+    covered by ``test_implausibly_small_cached_corpus_is_rejected``.
+    """
     import ward.bench.download as dl
 
     fake = tmp_path / f"{corpus_name}.jsonl"
@@ -253,9 +259,6 @@ def test_load_rows_no_cache_ignores_downloaded_corpus(monkeypatch, tmp_path):
     """use_cache=False must score the bundled sample even when a full
     download is cached - otherwise 'smoke' reports silently become full runs."""
     corpus = next(c for c in CORPORA if c.name == "lakera_ignore_instructions")
-    # 60 rows, not 3: a cache smaller than the 50-row bundled sample is now
-    # rejected as implausible, so a tiny fake would exercise that guard rather
-    # than the cache selection this test is about.
     _fake_cache(monkeypatch, tmp_path, corpus.name, n_rows=60)
     assert len(load_rows(corpus, use_cache=True)) == 60
     assert len(load_rows(corpus, use_cache=False)) == 50

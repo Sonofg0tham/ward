@@ -95,6 +95,22 @@ def _cache_is_plausible(corpus: Corpus) -> bool:
     return False
 
 
+def resolve_source(corpus: Corpus, *, use_cache: bool = True) -> str:
+    """Return "full" or "sample" - whichever :func:`load_rows` will actually use.
+
+    The single source of truth for the label. The runner used to recompute it
+    from ``is_cached()`` alone, so when the plausibility guard rejected a stub
+    cache and fell back to the bundled sample, the report still announced "the
+    full upstream corpora" over 50 sample rows. That is the same
+    quietly-wrong-number failure the guard was written to stop.
+    """
+    if not use_cache:
+        return "sample"
+    from .download import is_cached
+
+    return "full" if is_cached(corpus.name) and _cache_is_plausible(corpus) else "sample"
+
+
 def load_rows(corpus: Corpus, *, use_cache: bool = True) -> list[tuple[str, bool]]:
     """Return ``(text, expect_detect)`` pairs for a corpus.
 

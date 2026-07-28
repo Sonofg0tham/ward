@@ -10,7 +10,7 @@ from ..core.engine import build_input, scan_inputs
 from ..core.models import Severity, Surface, Verdict
 from ..core.rules import RulePack, load_rule_pack
 from ..judge import Judge
-from .corpora import CORPORA, Corpus, CorpusFit, load_rows
+from .corpora import CORPORA, Corpus, CorpusFit, load_rows, resolve_source
 
 
 @dataclass(frozen=True)
@@ -156,13 +156,12 @@ def run_benchmark(
     produce a true smoke report.
     """
     from .. import __version__
-    from .download import is_cached
 
     pack = rule_pack or load_rule_pack()
     results: list[CorpusResult] = []
     for corpus in corpora:
         rows = load_rows(corpus, use_cache=use_cache)
-        source = "full" if (use_cache and is_cached(corpus.name)) else "sample"
+        source = resolve_source(corpus, use_cache=use_cache)
         surface = _surface_for(corpus)
         expected_positive = sum(1 for _, ep in rows if ep)
         expected_negative = sum(1 for _, ep in rows if not ep)
