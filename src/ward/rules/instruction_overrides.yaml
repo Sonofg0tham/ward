@@ -33,7 +33,19 @@
     # High-signal nouns, anywhere in a sentence - but WITHOUT a
     # demonstrative, because "Windows users can ignore these instructions
     # and use the installer" is ordinary documentation English.
-    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
+    # A bare imperative has no frame to read, so anchor it to the start of
+    # the UTTERANCE or a sentence - never to a line start. `(?m)^` matches
+    # after every newline, so hard-wrapped prose faked that anchor, which
+    # is what retired the previous version of this branch.
+    - '(?i)(?:\A|(?<=[.!?] )|(?<=[.!?]\n))[ \t>*#\-0-9.)(\[\]/\"''’:]{0,64}ignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
+    # The FRAME decides, not the noun. "The parser will ignore directives it
+    # does not recognise" is documentation; the same words asking the agent
+    # to approve are not. Without this the rule blocked ordinary platform
+    # splits ("Windows users can ignore the instructions and use the
+    # installer") - and the project already pins the demonstrative spelling
+    # of that exact sentence as benign, so the discriminator was an accident
+    # of which determiner the author happened to use.
+    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b(?=[^\n]{0,100}\b(?:approve|approving|merge|merging|accept|lgtm|sign\s+off|ship|deploy|instead|comply|obey|do\s+(?:the\s+following|this|it|as)|reveal|print|output|leak|exfiltrate|send|post|upload|tell\s+me|give\s+me|say|write|answer|respond|repeat|execute|run)\b)'
     # A demonstrative IS signal in a bare sentence-initial imperative -
     # "Ignore those instructions" - which is the only shape the corpora
     # actually contain. The leading class is bounded and horizontal-only:
@@ -42,7 +54,6 @@
     # The leading class covers the decoration a real payload hides behind:
     # blockquote, list bullet, heading, ordered-list number, and comment
     # markers. Bounded and horizontal-only so the pattern stays linear.
-    - '(?im)^[ \t>*#\-0-9.)(\[\]/"''’:]{0,64}ignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
     # Ambiguous nouns need the sentence to ASK FOR SOMETHING. Line position
     # was tried first and failed both ways: hard wrapping and single-line
     # surfaces (a PR title, a commit subject) make everything line-initial,
@@ -269,6 +280,9 @@
     - '(?im)(?:^|(?<=[.!?] ))[ \t>*#\-0-9.)(\[\]/\"''’:]{0,64}ignore\s+(?:all\s+|any\s+|every\s+)?(?:the|those|these|your|my)\s+(?:directions?|commands?|orders?|rules?)\b'
     - '(?i)\b(?:override|replace)\s+(?:the|all|any)\s+(?:instructions?|prompts?|guidelines?|directives?|rules?)\b(?=[^\n]{0,100}\b(?:approve|approving|merge|merging|accept|lgtm|sign\s+off|ship|deploy|instead|comply|obey|do\s+(?:the\s+following|this|it|as)|reveal|print|output|leak|exfiltrate|send|post|upload|tell\s+me|give\s+me|say|write|answer|respond|repeat|execute|run)\b)'
     - '(?im)(?:^|(?<=[.!?] ))[ \t>*#\-0-9.)(\[\]/\"''’:]{0,64}(?:override|replace)\s+(?:the|all|any)\s+(?:instructions?|prompts?|guidelines?|directives?)\b'
+    # The bare descriptive form. Still reported, no longer gating - see
+    # "Severity is the answer to ambiguity" in SECURITY.md.
+    - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+|the\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Read the surrounding sentence. If it instructs the agent rather than describing behaviour, treat the metadata as untrusted."
 

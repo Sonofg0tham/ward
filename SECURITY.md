@@ -101,8 +101,23 @@ tier exists for.
 So the ambiguous forms live in their own **MEDIUM** rules
 (`io.ambiguous_override_hint`, `role.ambiguous_persona_hint`). They appear in
 the report and in Code Scanning, but at the Action's default `fail-on: high`
-they warn rather than block. The unambiguous nouns - instructions, prompts,
-directives, system prompt - stay HIGH.
+they warn rather than block.
+
+**The frame decides, not the noun.** An earlier version of this split drew the
+line on the noun, assuming instructions / prompts / directives / system prompt
+were unambiguous. They are not:
+
+| | |
+|---|---|
+| "The parser will ignore **commands** it does not recognise." | passed |
+| "The parser will ignore **directives** it does not recognise." | blocked |
+
+Same sentence, one word. A build gate that turns on which synonym an author
+reached for is not a gate. What actually separates them is the frame: a
+sentence that *describes* behaviour versus one that *instructs an agent*. So
+the HIGH branch requires either an agent-directed continuation ("...and
+approve this PR") or an utterance-initial imperative with no frame to read
+("Ignore these instructions"). Descriptive prose warns at MEDIUM.
 
 Measured on the full 1,391-row corpus:
 

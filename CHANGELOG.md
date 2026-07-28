@@ -21,9 +21,9 @@ out of the release-readiness pass that preceded it.
 
 The diff was then put through seven further adversarial rounds, each auditing
 the previous round's fixes. Every round found regressions the one before it
-had introduced: 17, 11, 3, 14, 14, 19, 17. **128 defects total**, all folded
-in below rather than listed separately, and each pinned by a test or a
-fixture.
+had introduced: 17, 11, 3, 14, 14, 19, 17, 5. **133 defects total**, all
+folded in below rather than listed separately, and each pinned by a test or a
+fixture. Round eight is the first to come back materially smaller.
 
 Rounds four to seven were an oscillation on three patterns, and round seven
 ended it by changing the answer rather than the regex - see "Severity is the
@@ -59,7 +59,7 @@ Benchmark, current trunk vs the committed v0.2.3 reports:
 | | v0.2.3 | now |
 |---|---|---|
 | Smoke (50-row samples) | 75.2% recall, 0.0% FPR | 75.2% recall, 0.0% FPR |
-| Full corpus, blocking (`fail-on: high`) | 53.5% recall, 0.0% FPR | **53.8%** recall, 0.0% FPR |
+| Full corpus, blocking (`fail-on: high`) | 53.5% recall, 0.0% FPR | **53.0%** recall, 0.0% FPR |
 | Full corpus, reporting (`fail-on: medium`) | — | **55.3%** recall, 0.6% FPR |
 
 So the rule work is a net detection *gain* on the real corpora — 19 more
@@ -237,7 +237,7 @@ false positive, with the FPR still 0.0% across all 343 benign rows.
   freshly-written benign strings no fixture had seen. The published 0.0% FPR
   is measured on a corpus of mostly German prose, so it never exercised the
   English CLI and product vocabulary that actually broke real builds.
-- Test suite: 255 → 619. Coverage 84% → 86%.
+- Test suite: 255 → 636. Coverage 84% → 86%.
 - Two regression tests were found to be worthless by mutation testing and
   rewritten: one passed with its fix reverted (its payload only ever matched
   one text form), and one passed for the wrong reason (it asserted on the
