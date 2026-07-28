@@ -43,6 +43,13 @@ _IDENTIFIER_SURFACES: frozenset[Surface] = frozenset(
 # suppression that does not flow through scan content at all.
 _SUPPRESSION_SURFACES: frozenset[Surface] = frozenset({"file_content"})
 
+# How many decoded payloads get the full evasion treatment. Each base costs a
+# handful of extra derived forms, and the decoder can legitimately return many
+# candidates for a document full of hashes, so this bounds the multiplication
+# without capping detection in any realistic case - a payload arrives in one
+# or two blobs, not fifty.
+_MAX_DECODED_EVASION_BASES = 8
+
 
 def build_input(
     surface: Surface,
@@ -68,8 +75,10 @@ def build_input(
         if form and form != normalised and form not in decoded:
             decoded.append(form)
 
+    decoded_payloads: list[str] = []
     for form in decode_candidates(text):
         _add(form)
+        decoded_payloads.append(form)
     # Also decode the NORMALISED text. A single zero-width character dropped
     # inside a base64 or hex blob makes the raw text undecodable, so scanning
     # only the raw form meant one invisible character was enough to stop the
@@ -77,6 +86,7 @@ def build_input(
     if normalised != text:
         for form in decode_candidates(normalised):
             _add(form)
+            decoded_payloads.append(form)
 
     # Text forms the evasion transforms should be applied to. Identifier
     # surfaces get both, because git forbids spaces in ref names: any
@@ -92,6 +102,25 @@ def build_input(
         if identifier_form != normalised:
             _add(identifier_form)
             evasion_bases.append(identifier_form)
+
+    # A DECODED PAYLOAD IS STILL ATTACKER-CONTROLLED TEXT, so it gets the same
+    # treatment as the surface text rather than being matched only as-is.
+    # Decoding used to be the end of the line: base64 of plain English was
+    # caught, but base64 of the SAME sentence in leetspeak, or with a Cyrillic
+    # homoglyph, or hyphenated instead of spaced, all scanned clean. Each was
+    # a one-step bypass built by composing two techniques Ward already
+    # detected individually.
+    #
+    # Hyphenation is the important one. git forbids spaces in ref names, so
+    # any multi-word payload in a branch name MUST be delimited - which meant
+    # base64 of a branch-shaped payload was the natural encoding to reach for
+    # and the one guaranteed to get through.
+    for payload in decoded_payloads[:_MAX_DECODED_EVASION_BASES]:
+        split_payload = split_identifier(payload)
+        if split_payload != payload:
+            _add(split_payload)
+            evasion_bases.append(split_payload)
+        evasion_bases.append(payload)
 
     # Unicode TAG-block decode runs on the RAW text (normalise strips those
     # chars). Any TAG-smuggled instruction reappears as visible ASCII so the

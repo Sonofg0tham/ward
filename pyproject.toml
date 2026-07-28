@@ -122,6 +122,7 @@ ignore = ["E501", "UP042"]
 "tests/test_fail_closed.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_lab.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_normalise.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_encoding_bypasses.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 python_version = "3.11"

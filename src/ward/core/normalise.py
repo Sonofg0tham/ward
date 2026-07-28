@@ -58,6 +58,12 @@ _BASE64_URLSAFE_RE = re.compile(
 )
 _HEX_RE = re.compile(r"(?<![0-9a-fA-F])([0-9a-fA-F]{24,})(?![0-9a-fA-F])")
 
+# The separators git forces into branch, tag and file names. Replacing these
+# with spaces gives the blob patterns above a second view of the text in
+# which a prefixed payload - "feat/<base64>" - is no longer hidden behind a
+# character that belongs to base64's own alphabet.
+_IDENTIFIER_SEPARATOR_RE = re.compile(r"[/\\]+")
+
 # Recursive decoding bounds. Three layers of nested encoding is far more
 # than any real attacker would invest in, and the byte cap stops a
 # pathological input from snowballing the engine.
@@ -338,12 +344,48 @@ def decompose_spaced_runs(text: str) -> str:
 
     The all-single-spaces case ("i g n o r e p r e v i o u s") is NOT
     handled here because word boundaries cannot be recovered reliably.
+    See ``decompose_space_separated`` for the case where they can.
     """
 
     def _collapse(match: re.Match[str]) -> str:
         return re.sub(r"[\.\-_·]", "", match.group(0))
 
     return _INTRA_WORD_SPACED_RE.sub(_collapse, text)
+
+
+# A run of four or more single characters separated by exactly one space.
+# Four is enough to be unambiguous: "a b c" appears in ordinary prose (list
+# labels, musical keys, "grades A B C"), "i g n o r e" does not.
+_LONG_SPACED_RUN_RE = re.compile(r"(?<![^\s])(?:\S ){3,}\S(?![^\s])")
+# Two or more. Only ever applied to text already proven to be spaced out.
+_ANY_SPACED_RUN_RE = re.compile(r"(?<![^\s])(?:\S ){1,}\S(?![^\s])")
+
+
+def decompose_space_separated(text: str) -> str:
+    """Collapse space-separated letter runs, keeping word boundaries.
+
+    "i g n o r e  a l l  p r e v i o u s" -> "ignore all previous"
+
+    Spacing every character is the most obvious way to break a phrase up,
+    and it was the one shape ``decompose_spaced_runs`` did not cover - that
+    handles ".", "-" and "_" separators but not the space, because with a
+    single space everywhere the word boundaries are genuinely unrecoverable.
+
+    They ARE recoverable in the form an attacker actually writes, though:
+    two spaces between words and one between letters, because that is what
+    stays readable to the human being social-engineered.
+
+    Collapsing only long runs is not enough on its own. "i g n o r e  a l l
+    p r e v i o u s" left "a l l" untouched at three characters and the
+    phrase still did not match. But a threshold that low would fire on
+    "grades A B C" in ordinary prose. The way out is to decide ONCE per
+    string: a single run of four or more spaced characters is not something
+    prose does, and once that proves the text is deliberately spaced out,
+    every run in it can be collapsed - including the short ones.
+    """
+    if not _LONG_SPACED_RUN_RE.search(text):
+        return text
+    return _ANY_SPACED_RUN_RE.sub(lambda m: m.group(0).replace(" ", ""), text)
 
 
 def collapse_repeats(text: str, *, max_run: int = 1) -> str:
@@ -379,6 +421,8 @@ def evasion_forms(text: str) -> list[str]:
 
     _add(deleet(text))
     _add(decompose_spaced_runs(text))
+    _add(decompose_space_separated(text))
+    _add(decompose_space_separated(deleet(text)))
     _add(collapse_repeats(text, max_run=1))
     _add(collapse_repeats(text, max_run=2))
     # Confusable fold catches all-confusable tokens ("іgnοrе" -> "ignore")
@@ -408,21 +452,41 @@ def evasion_forms(text: str) -> list[str]:
     return forms
 
 
+# Characters that separate words where a space cannot be used. A decoded
+# payload full of these is prose, not a hash - and identifier surfaces force
+# an attacker to use them, because git forbids spaces in ref names.
+_WORD_SEPARATORS = frozenset(" \t\n\r-_.,:;/+")
+
+
 def _looks_like_text(s: str) -> bool:
     """Heuristic gate for keeping a decoded candidate.
 
     Lowering the base64/hex thresholds without a content gate would flag
     every commit SHA, every certificate fragment, every UUID concatenation.
-    The gate is intentionally cheap: most attack payloads contain spaces
-    and have a high printable ratio; most non-text byte salads do not.
+
+    THE COST OF THE TWO ERRORS IS NOT SYMMETRIC, and this gate used to be
+    tuned as though it were. It runs BEFORE rule matching, so keeping a
+    candidate that turns out to be a hash costs nothing - no rule matches it
+    and nothing is reported. Dropping a candidate that was really a payload
+    is a total bypass. So the gate should lean heavily towards keeping.
+
+    The old rule "16 or more characters and no whitespace means hash" failed
+    exactly that way: base64 of ``ignore-all-previous-instructions`` was
+    discarded for containing no spaces, and hyphenating before encoding was a
+    one-step bypass on the surface Ward exists to protect - git forbids
+    spaces in ref names, so every real branch-name payload is hyphenated.
     """
     if len(s) < 4:
         return False
     printable = sum(1 for ch in s if ch.isprintable() or ch in "\n\r\t")
     if printable / len(s) < 0.85:
         return False
-    # Long, dense, no whitespace - looks like a hash / token / cert.
-    return not (len(s) >= 16 and not any(ch.isspace() for ch in s))
+    if len(s) < 16:
+        return True
+    # A hash, token or certificate fragment is a long run with no word
+    # boundaries of any kind. Hyphens and underscores count as boundaries:
+    # "ignore-all-previous-instructions" is prose, "a3f8b2c1d9e4..." is not.
+    return any(ch in _WORD_SEPARATORS for ch in s)
 
 
 def _try_decodings(text: str) -> list[str]:
@@ -455,35 +519,68 @@ def _try_decodings(text: str) -> list[str]:
         except (UnicodeDecodeError, ValueError):
             pass
 
-    for match in _BASE64_RE.finditer(text):
-        blob = match.group(1)
-        try:
-            payload = base64.b64decode(blob, validate=True)
-            candidates.append(payload.decode("utf-8", errors="strict"))
-        except (binascii.Error, ValueError, UnicodeDecodeError):
-            continue
+    # Scan the text as given AND with identifier separators turned into
+    # spaces, keeping every blob either view finds.
+    #
+    # The blob patterns carry a negative lookbehind over their own alphabet,
+    # so that a match cannot start halfway along a longer run. But '/' and
+    # '+' belong to standard base64's alphabet and '-' and '_' to the
+    # URL-safe one, and all four are ALSO the separators git forces into ref
+    # names. The result was a one-character bypass on Ward's flagship
+    # surface: a bare base64 branch name was caught and the same payload
+    # behind the conventional "feat/" prefix scanned completely clean,
+    # because the '/' sat in the lookbehind.
+    #
+    # Scanning both views rather than replacing one with the other matters:
+    # the split view finds "feat/<blob>", the original still finds a genuine
+    # base64 blob with a '/' inside it. Neither can lose what the other saw.
+    views = [text]
+    split_view = _IDENTIFIER_SEPARATOR_RE.sub(" ", text)
+    if split_view != text:
+        views.append(split_view)
 
-    # URL-safe base64 (RFC 4648 sec 5): re-translate then try standard b64.
-    for match in _BASE64_URLSAFE_RE.finditer(text):
-        blob = match.group(1)
-        if "-" not in blob and "_" not in blob:
-            continue  # already covered by _BASE64_RE
-        translated = blob.translate(str.maketrans("-_", "+/"))
-        try:
-            payload = base64.b64decode(translated + "==", validate=False)
-            candidates.append(payload.decode("utf-8", errors="strict"))
-        except (binascii.Error, ValueError, UnicodeDecodeError):
-            continue
+    # Keyed by (decoder, blob), NOT by blob alone. A hex run is also a valid
+    # base64 run, so one shared set let the base64 loop claim the blob and
+    # silently skip the hex decode of the same characters - which is the
+    # decode that actually recovers the payload.
+    seen_blobs: set[tuple[str, str]] = set()
+    for view in views:
+        for match in _BASE64_RE.finditer(view):
+            blob = match.group(1)
+            if ("b64", blob) in seen_blobs:
+                continue
+            seen_blobs.add(("b64", blob))
+            try:
+                payload = base64.b64decode(blob, validate=True)
+                candidates.append(payload.decode("utf-8", errors="strict"))
+            except (binascii.Error, ValueError, UnicodeDecodeError):
+                continue
 
-    for match in _HEX_RE.finditer(text):
-        blob = match.group(1)
-        if len(blob) % 2 != 0:
-            continue
-        try:
-            payload = bytes.fromhex(blob)
-            candidates.append(payload.decode("utf-8", errors="strict"))
-        except (ValueError, UnicodeDecodeError):
-            continue
+        # URL-safe base64 (RFC 4648 sec 5): re-translate then try standard b64.
+        for match in _BASE64_URLSAFE_RE.finditer(view):
+            blob = match.group(1)
+            if "-" not in blob and "_" not in blob:
+                continue  # already covered by _BASE64_RE
+            if ("urlsafe", blob) in seen_blobs:
+                continue
+            seen_blobs.add(("urlsafe", blob))
+            translated = blob.translate(str.maketrans("-_", "+/"))
+            try:
+                payload = base64.b64decode(translated + "==", validate=False)
+                candidates.append(payload.decode("utf-8", errors="strict"))
+            except (binascii.Error, ValueError, UnicodeDecodeError):
+                continue
+
+        for match in _HEX_RE.finditer(view):
+            blob = match.group(1)
+            if len(blob) % 2 != 0 or ("hex", blob) in seen_blobs:
+                continue
+            seen_blobs.add(("hex", blob))
+            try:
+                payload = bytes.fromhex(blob)
+                candidates.append(payload.decode("utf-8", errors="strict"))
+            except (ValueError, UnicodeDecodeError):
+                continue
 
     return candidates
 
@@ -509,12 +606,28 @@ def decode_candidates(text: str, *, _depth: int = 0, _budget: list[int] | None =
     for candidate in _try_decodings(text):
         if not candidate or candidate == text:
             continue
-        _budget[0] -= len(candidate)
-        if _budget[0] < 0:
-            break
+        # KEEP THE CANDIDATE BEFORE SPENDING ANY BUDGET. The budget exists to
+        # bound RECURSION, which is the only place work can snowball; the
+        # candidates at this level are already bounded by the number of regex
+        # matches, i.e. linear in the input.
+        #
+        # Charging for them and then `break`ing was a silent detection loss
+        # proportional to input size. _try_decodings returns whole-text
+        # transforms (percent, HTML entity, quoted-printable) BEFORE the
+        # base64 and hex matches, so a body of a few tens of KB spent the
+        # entire budget on passthrough forms and then abandoned the loop -
+        # never reaching the base64 blob at the end. A 39KB PR body with an
+        # encoded payload came back WARN instead of FAIL, and the Action
+        # passes a WARN. The bigger the surrounding text, the more reliably
+        # the payload was missed.
         if _looks_like_text(candidate):
             out.append(candidate)
-        # Always recurse; an intermediate base64-of-base64 layer is dense
-        # and would fail the text gate, but its decoded child may not.
+        _budget[0] -= len(candidate)
+        if _budget[0] <= 0:
+            # Stop going deeper, but keep scanning siblings at this level.
+            continue
+        # Recurse even when the candidate failed the text gate: an
+        # intermediate base64-of-base64 layer is dense and would fail it,
+        # but its decoded child may not.
         out.extend(decode_candidates(candidate, _depth=_depth + 1, _budget=_budget))
     return out
