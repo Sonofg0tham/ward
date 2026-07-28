@@ -70,6 +70,26 @@ case "${EXIT_CODE}" in
   *) VERDICT="error" ;;
 esac
 
+# EXIT 1 IS AMBIGUOUS AND IT IS THE DANGEROUS ONE. Ward returns 1 for a
+# genuine WARN, and Python returns 1 for any uncaught exception - a broken
+# install, a missing dependency, an interpreter crash mid-scan. Both landed
+# on VERDICT=warn, which exits 0 and passes the job. So the single most
+# likely way for this action to be broken produced a green tick.
+#
+# A real WARN leaves a report that SAYS so. A crash leaves an empty file, or
+# a partial one, or a traceback. Requiring the report to corroborate the
+# exit code is what separates them, and anything that does not corroborate
+# fails closed.
+if [[ "${VERDICT}" == "warn" ]]; then
+  if [[ ! -s "${OUTPUT}" ]]; then
+    echo "::error::Ward exited 1 and wrote no report - the scan did not complete. Failing closed."
+    VERDICT="error"
+  elif ! grep -qiE '"verdict"[[:space:]]*:[[:space:]]*"warn"|verdict:[[:space:]]*WARN' "${OUTPUT}"; then
+    echo "::error::Ward exited 1 but its report does not record a WARN verdict - the scan did not complete. Failing closed."
+    VERDICT="error"
+  fi
+fi
+
 {
   echo "report=${OUTPUT}"
   echo "verdict=${VERDICT}"
@@ -107,8 +127,10 @@ fi
 # actually screened. Passing the job here would turn a broken security gate
 # into a green tick, which is the one outcome worse than a noisy failure.
 if [[ "${VERDICT}" == "error" ]]; then
-  echo "::error::Ward exited with unexpected code ${EXIT_CODE} - the scan did not complete. Failing closed."
-  exit "${EXIT_CODE}"
+  echo "::error::Ward exited with code ${EXIT_CODE} without completing a scan. Failing closed."
+  # Exit 1 would be indistinguishable from a plain FAIL to anything reading
+  # this step's status, and an unexpected code could be 0. Always 2.
+  exit 2
 fi
 
 if [[ "${VERDICT}" == "fail" ]]; then
