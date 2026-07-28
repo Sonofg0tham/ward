@@ -263,14 +263,28 @@ _APOSTROPHES = str.maketrans({"’": "'", "‘": "'", "ʼ": "'", "ʹ": "'"})
 
 
 def normalise_text(text: str) -> str:
-    """NFKC-normalise, fold typographic apostrophes, strip invisible characters.
+    """NFKC-normalise, fold apostrophes and line endings, strip invisibles.
 
     Suitable for feeding to regex-based detectors that want to ignore visual
     obfuscation. Use ``contains_invisible`` against the raw text first if you
     want to flag the obfuscation itself.
+
+    LINE ENDINGS ARE FOLDED TO ``\\n`` HERE, deliberately, rather than by
+    adding ``\\r`` to each rule that cares. Several rules anchor on a sentence
+    boundary with a lookbehind like ``(?<=[.!?]\\n)``, and one of them had the
+    CRLF spelling and another did not - so the identical PR body scored HIGH
+    when authored on Linux and MEDIUM when authored on Windows, which is exit
+    2 versus exit 1, which is a blocked merge versus a passing job. Nobody
+    would find that from the rule text.
+
+    Patching each lookbehind fixes today's rules and not tomorrow's. Folding
+    once, at the single point every text rule reads from, means a rule author
+    cannot get it wrong. The raw form keeps its CRLF, so the obfuscation
+    detectors still see the real bytes.
     """
     nfkc = unicodedata.normalize("NFKC", text)
-    return strip_invisible(nfkc.translate(_APOSTROPHES))
+    unified = nfkc.replace("\r\n", "\n").replace("\r", "\n")
+    return strip_invisible(unified.translate(_APOSTROPHES))
 
 
 def contains_invisible(text: str) -> list[tuple[int, str, str]]:

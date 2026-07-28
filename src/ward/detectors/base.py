@@ -52,7 +52,19 @@ class RuleBasedDetector(Detector):
         self._rules: tuple[Rule, ...] = rule_pack.by_category(self.category)
 
     def _texts_for(self, source: ScanInput) -> list[str]:
-        texts = [source.raw] if self.matches_against == "raw" else [source.normalised]
+        # A "raw" detector gets the raw form FIRST, because it exists to see
+        # characters the normaliser removes - but it gets the normalised form
+        # too. Giving it only the raw text meant every YAML rule in the
+        # obfuscation pack was blind to anything NFKC recovers: "<!-- ignore
+        # your new instructions -->" fired, and the same comment written with
+        # a fullwidth "＜" did not, because U+FF1C only becomes "<" after
+        # normalisation. One codepoint, and the rule never saw the text it was
+        # written for.
+        texts = (
+            [source.raw, source.normalised]
+            if self.matches_against == "raw"
+            else [source.normalised]
+        )
         # Always also scan any decoded base64/hex payloads. This lets a regex
         # rule catch instructions hidden inside an obfuscated blob.
         texts.extend(source.decoded)
