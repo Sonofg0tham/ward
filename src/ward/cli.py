@@ -147,32 +147,38 @@ def _strip_format_chars(text: str) -> str:
     return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
 
 
-def _looks_like_real_utf16(raw: bytes, encoding: str) -> bool:
-    """True if ``raw`` really is UTF-16 in this endianness, not an artefact.
+def _text_score(text: str) -> float:
+    """How much this reading looks like the document, rather than a by-product.
 
-    Decides whether an alternate reading is the document or a by-product.
-    Re-reading ASCII as UTF-16 manufactures format characters, so those have
-    to be stripped - but a genuine BOM-less UTF-16 file has the SAME shape,
-    and stripping there deletes the payload. Blanket stripping made
-    obf.bidi_override, obf.unicode_tag and obf.zero_width blind on any
-    BOM-less UTF-16 file, and the attacker chooses whether to write a BOM.
+    Four heuristics have been tried in this file to answer "which decoding is
+    real", and every one was defeated by a crafted input: byte density,
+    U+FFFD scoring, an absolute NUL floor, and NUL parity. They all shared a
+    shape - a threshold an attacker can sit just the wrong side of.
 
-    Real UTF-16 with an ASCII component puts the NUL on one fixed parity:
-    high byte second for little-endian, first for big-endian.
+    Ranking sidesteps that. There is no bar to step over: whichever reading
+    scores highest IS the document and keeps its formatting characters, so
+    genuine obfuscation is still reported; every other reading is a
+    by-product and gets stripped, so a re-decode cannot manufacture a
+    finding. Being wrong costs a little precision, never a silent bypass.
     """
-    if len(raw) < 2 or len(raw) % 2:
-        return False
-    head = raw[:4096]
-    even = sum(1 for i in range(0, len(head) - 1, 2) if head[i] == 0)
-    odd = sum(1 for i in range(1, len(head), 2) if head[i] == 0)
-    pairs = max(1, len(head) // 2)
-    # The decisive signal is that NO NUL sits on the WRONG parity. The density
-    # bar is deliberately low, because non-Latin characters and surrogate
-    # pairs carry no NUL at all - a TAG-block payload (U+E0000+) is all
-    # surrogates, and a 90% bar rejected the very file the check exists for.
-    if encoding == "utf-16-le":
-        return even == 0 and odd * 4 >= pairs
-    return odd == 0 and even * 4 >= pairs
+    if not text:
+        return -1.0
+    n = len(text)
+    # Printable ASCII, not "printable" generally. Byte-swapped ASCII decodes
+    # to perfectly valid CJK, which is 100% printable and would win on any
+    # printability test - the same trap that made an earlier U+FFFD-scoring
+    # attempt always pick little-endian.
+    ascii_like = sum(1 for ch in text if " " <= ch <= "~" or ch in "\n\r\t")
+    # Word spacing is the other half. Real prose in any script has spaces and
+    # newlines; a byte-swap artefact has essentially none.
+    spacing = sum(1 for ch in text if ch in " \n\t")
+    # NUL is positive evidence of the WRONG reading: no text file contains
+    # one, but reading UTF-16 as UTF-8 produces one per ASCII character.
+    # Leaving it neutral let the UTF-8 reading of a Japanese UTF-16 document
+    # outscore the real one, because the interleaved NULs cost nothing while
+    # the few embedded ASCII characters scored.
+    penalty = text.count("�") + text.count("\x00")
+    return (ascii_like + spacing - penalty) / n
 
 
 def _read_text_file(path: Path) -> str | None:
@@ -235,26 +241,26 @@ def _read_text_file(path: Path) -> str | None:
     if b"\x00" not in raw:
         # Valid UTF-8 text does not contain NUL. Nothing to reinterpret.
         return text8
-    readings = [text8]
+    candidates = [text8]
     for encoding in ("utf-16-le", "utf-16-be"):
         try:
-            alt = raw.decode(encoding, errors="replace")
+            candidates.append(raw.decode(encoding, errors="replace"))
         except (UnicodeError, LookupError):  # pragma: no cover - defensive
             continue
-        # Strip the invisible and bidi formatting characters from the
-        # ALTERNATE readings only. "The wrong readings are CJK noise that
-        # matches no English rule" was wrong: the obfuscation detectors match
-        # CHARACTERS, not English, and re-reading ordinary ASCII as UTF-16-LE
-        # manufactures them - the pair ". " (0x2E 0x20) lands on U+202E
-        # RIGHT-TO-LEFT OVERRIDE. One NUL byte in a prose file was enough to
-        # raise a HIGH obf.bidi_override on text that contains no such
-        # character. Their presence in a re-decode is a decoding artefact,
-        # never evidence; the primary UTF-8 reading still carries the real
-        # ones, so genuine obfuscation is still reported.
-        if not _looks_like_real_utf16(raw, encoding):
-            alt = _strip_format_chars(alt)
-        if alt and alt not in readings:
-            readings.append(alt)
+
+    # RANK the readings; do not threshold them. The best-scoring one is the
+    # document and keeps its formatting characters, so real obfuscation is
+    # still reported. Every other reading is a by-product and is stripped, so
+    # a re-decode cannot manufacture one: re-reading ordinary ASCII as
+    # UTF-16-LE turns the pair ". " (0x2E 0x20) into U+202E RIGHT-TO-LEFT
+    # OVERRIDE, and one NUL byte in a prose file was enough to raise a HIGH
+    # obf.bidi_override on text containing no such character.
+    best = max(range(len(candidates)), key=lambda i: _text_score(candidates[i]))
+    readings: list[str] = []
+    for i, text in enumerate(candidates):
+        reading = text if i == best else _strip_format_chars(text)
+        if reading and reading not in readings:
+            readings.append(reading)
     return "\n".join(readings)
 
 
