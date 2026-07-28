@@ -312,7 +312,7 @@ def contains_invisible(text: str) -> list[tuple[int, str, str]]:
 # spaces and a "-" took 0.98s; 1,600 spaces took 7.7s, and that is a 1.6KB
 # file. Trailing whitespace is stripped by the caller instead.
 _WARD_ALLOW_RE = re.compile(
-    r"(?:<!--|//|#|/\*)[ \t]*ward-allow-file[ \t]*:[ \t]*([^\n\->]{1,500})(?:-->|\*/|$)",
+    r"(?:<!--|//|#|/\*)[ \t]*ward-allow-file[ \t]*:[ \t]*((?:(?!\*/)[^\n\->]){1,500})(?:-->|\*/|$)",
     re.MULTILINE,
 )
 
@@ -662,13 +662,14 @@ def _decode_candidates_tagged(
         # Recurse even when the candidate failed the text gate: an
         # intermediate base64-of-base64 layer is dense and would fail it,
         # but its decoded child may not.
-        # A blob found inside a blob is still a blob; anything found inside
-        # a whole-document transform inherits that framing too.
+        # Each nested candidate keeps ITS OWN kind. Inheriting the outer
+        # one was wrong in the direction that loses detections: a base64 blob
+        # found inside a percent-encoded document is still a blob - an
+        # encoded run with a payload in it - but it inherited "whole" and so
+        # never got the identifier-split treatment. percent(base64(payload))
+        # scanned clean while base64(payload) was caught.
         out.extend(
-            (kind, nested)
-            for _, nested in _decode_candidates_tagged(
-                candidate, _depth=_depth + 1, _budget=_budget
-            )
+            _decode_candidates_tagged(candidate, _depth=_depth + 1, _budget=_budget)
         )
     return out
 

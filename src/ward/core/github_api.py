@@ -159,6 +159,16 @@ def fetch_pr_metadata(owner: str, repo: str, number: int) -> PRMetadata:
     """
     with httpx.Client(headers=_headers(), timeout=30.0) as client:
         pr = _get(client, f"/repos/{owner}/{repo}/pulls/{number}")
+        # A 200 whose body is a list or a string - a proxy, a captive
+        # portal, an API change - reached .get() and raised
+        # AttributeError, which exits 1. The Action reads exit 1 as WARN
+        # and passes the job, so a PR nobody could screen went green.
+        if not isinstance(pr, dict):
+            raise GitHubError(
+                f"GitHub returned {type(pr).__name__} for PR {owner}/{repo}#{number}, "
+                "expected an object. Refusing to report a verdict on a response "
+                "Ward could not read."
+            )
         commits = _get_all(client, f"/repos/{owner}/{repo}/pulls/{number}/commits")
         files = _get_all(client, f"/repos/{owner}/{repo}/pulls/{number}/files")
 
