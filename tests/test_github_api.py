@@ -160,3 +160,125 @@ def test_fetch_pr_metadata_raises_on_non_2xx(monkeypatch: pytest.MonkeyPatch):
     with pytest.raises(GitHubError) as excinfo:
         fetch_pr_metadata("acme", "widget", 42)
     assert "404" in str(excinfo.value)
+
+
+# --- pagination -------------------------------------------------------------
+#
+# Ward used to read one page of commits and one page of files and stop.
+# GitHub's default page size is 30, so an attacker only had to push thirty
+# unremarkable commits before the payload for scan-pr to never see it - and
+# report PASS.
+
+
+def _paged_handler(n_commits: int, n_files: int, *, declared: tuple[int, int] | None = None):
+    """A PR whose list endpoints honour per_page and emit Link headers."""
+    commits = [
+        {"sha": f"sha{i:04d}", "commit": {"message": f"commit {i}"}} for i in range(n_commits)
+    ]
+    files = [{"filename": f"file{i:04d}.py"} for i in range(n_files)]
+    said_commits, said_files = declared or (n_commits, n_files)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        page = int(request.url.params.get("page", 1))
+        per_page = int(request.url.params.get("per_page", 30))
+        items = commits if path.endswith("/commits") else files if path.endswith("/files") else None
+        if items is None:
+            return httpx.Response(
+                200,
+                json={
+                    "title": "t",
+                    "body": "b",
+                    "head": {"ref": "feat/x", "sha": "s"},
+                    "base": {"ref": "main"},
+                    "commits": said_commits,
+                    "changed_files": said_files,
+                },
+            )
+        start = (page - 1) * per_page
+        chunk = items[start : start + per_page]
+        headers = {}
+        if start + per_page < len(items):
+            nxt = request.url.copy_set_param("page", page + 1)
+            headers["Link"] = f'<{nxt}>; rel="next"'
+        return httpx.Response(200, json=chunk, headers=headers)
+
+    return handler
+
+
+def test_commits_beyond_the_first_page_are_scanned(monkeypatch: pytest.MonkeyPatch):
+    """Must exceed per_page, not merely GitHub's 30-item default.
+
+    The first version of this test used 35 commits, which exposed the
+    original bug but stopped discriminating the moment the fix asked for
+    per_page=100 - 35 items fit on one page, so no Link header is emitted and
+    the paging loop is never exercised. Mutation testing caught it: breaking
+    the loop left this test green. 150 forces a genuine second request.
+    """
+    _install_transport(monkeypatch, _paged_handler(150, 1))
+    meta = fetch_pr_metadata("acme", "widget", 42)
+    assert len(meta.commit_messages) == 150, "commits past the first page were dropped"
+    assert meta.commit_messages[-1] == ("sha0149", "commit 149")
+
+
+def test_changed_files_beyond_the_first_page_are_scanned(monkeypatch: pytest.MonkeyPatch):
+    _install_transport(monkeypatch, _paged_handler(1, 250))
+    meta = fetch_pr_metadata("acme", "widget", 42)
+    assert len(meta.changed_file_paths) == 250
+    assert "file0249.py" in meta.changed_file_paths
+
+
+def test_pagination_requests_the_largest_page_size(monkeypatch: pytest.MonkeyPatch):
+    """100 is GitHub's maximum. Asking for fewer means more round trips."""
+    seen: list[str] = []
+    real_client = httpx.Client
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return _paged_handler(5, 5)(request)
+
+    def factory(**kwargs):
+        kwargs["transport"] = httpx.MockTransport(_handler)
+        return real_client(**kwargs)
+
+    monkeypatch.setattr(httpx, "Client", factory)
+    fetch_pr_metadata("acme", "widget", 42)
+    listed = [u for u in seen if u.endswith(("commits?per_page=100", "files?per_page=100"))]
+    assert len(listed) == 2, f"list endpoints did not request per_page=100: {seen}"
+
+
+def test_a_truncated_pr_fails_closed_rather_than_reporting_pass(monkeypatch: pytest.MonkeyPatch):
+    """GitHub caps commits at 250 and files at 3000, whatever the page size.
+
+    Past that, Ward genuinely cannot see the whole PR. Reporting a verdict on
+    the part it did see would be a PASS on an unscanned commit, so it must
+    refuse instead - the PR object states its own totals, which is a more
+    reliable signal than guessing at where the cap is.
+    """
+    # 250 commits returned, but the PR says it has 400.
+    _install_transport(monkeypatch, _paged_handler(250, 1, declared=(400, 1)))
+    with pytest.raises(GitHubError) as exc:
+        fetch_pr_metadata("acme", "widget", 42)
+    assert "250 of 400" in str(exc.value)
+    assert "scan-local" in str(exc.value), "the error must say what to do instead"
+
+
+def test_pagination_will_not_follow_a_link_off_github(monkeypatch: pytest.MonkeyPatch):
+    """The next URL arrives in a response header, carrying the caller's token.
+
+    A proxy that rewrites Link could otherwise redirect paging to its own
+    host and be handed the Authorization header.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/commits"):
+            return httpx.Response(
+                200,
+                json=[{"sha": "a", "commit": {"message": "m"}}],
+                headers={"Link": '<https://evil.example/collect?page=2>; rel="next"'},
+            )
+        return httpx.Response(200, json={"head": {}, "base": {}})
+
+    _install_transport(monkeypatch, handler)
+    with pytest.raises(GitHubError, match="refusing to follow pagination"):
+        fetch_pr_metadata("acme", "widget", 42)

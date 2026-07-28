@@ -83,16 +83,88 @@ def _get(client: httpx.Client, path: str) -> Any:
         raise GitHubError(f"GitHub returned a non-JSON response for {path}: {exc}") from exc
 
 
+# GitHub's list endpoints return 30 items per page by default and 100 at
+# most. Ward used to read one page and stop, so a PR with 35 commits had
+# commits 31-35 never scanned at all - an attacker only had to push thirty
+# innocuous commits before the payload. Same for the 31st changed file.
+_PER_PAGE = 100
+
+# A PR's commits endpoint is capped at 250 by GitHub and files at 3000, so
+# beyond that no amount of paging returns the rest. The completeness check
+# below turns that into a loud failure rather than a quiet partial scan.
+_MAX_PAGES = 100
+
+
+def _get_all(client: httpx.Client, path: str) -> list[Any]:
+    """GET every page of a GitHub list endpoint.
+
+    Follows the ``Link: rel="next"`` header rather than incrementing a page
+    counter, because that is what GitHub documents as the stable contract.
+    """
+    joiner = "&" if "?" in path else "?"
+    url = f"{GITHUB_API}{path}{joiner}per_page={_PER_PAGE}"
+    items: list[Any] = []
+    for _ in range(_MAX_PAGES):
+        try:
+            response = client.get(url)
+        except httpx.HTTPError as exc:
+            raise GitHubError(f"request to GitHub failed for {url}: {exc}") from exc
+        if response.status_code // 100 != 2:
+            raise GitHubError(f"GET {url} -> {response.status_code}: {response.text}")
+        try:
+            page = response.json()
+        except ValueError as exc:
+            raise GitHubError(f"GitHub returned a non-JSON response for {url}: {exc}") from exc
+        if not isinstance(page, list):
+            raise GitHubError(f"expected a list from {url}, got {type(page).__name__}")
+        items.extend(page)
+
+        next_url = response.links.get("next", {}).get("url")
+        if not next_url:
+            return items
+        # The next URL comes from a response header, so it is only as
+        # trustworthy as the connection. Refuse to follow it off GitHub:
+        # otherwise a proxy could redirect paging to its own host and
+        # receive the caller's token in the Authorization header.
+        if not str(next_url).startswith(f"{GITHUB_API}/"):
+            raise GitHubError(f"refusing to follow pagination off {GITHUB_API}: {next_url!r}")
+        url = str(next_url)
+    raise GitHubError(f"pagination did not terminate after {_MAX_PAGES} pages for {path}")
+
+
+def _check_complete(kind: str, fetched: int, declared: object, ref: str) -> None:
+    """Fail closed if GitHub says the PR has more items than we read.
+
+    Ward's answer is only meaningful if it saw everything. A scan that
+    silently skipped commit 251 is worse than no scan, because it reports
+    PASS. The PR object states its own totals, so compare against those
+    rather than trying to infer whether a server-side cap was hit.
+    """
+    if not isinstance(declared, int) or declared <= fetched:
+        return
+    raise GitHubError(
+        f"{ref}: read {fetched} of {declared} {kind}. GitHub caps this endpoint "
+        f"(250 commits, 3000 files), so Ward cannot see the whole PR and will "
+        f"not report a verdict on part of it. Scan the merge result locally "
+        f"with 'ward scan-local' instead."
+    )
+
+
 def fetch_pr_metadata(owner: str, repo: str, number: int) -> PRMetadata:
     """Fetch the metadata surfaces of a PR.
 
     Body and title are read verbatim from the PR. Commit messages and file
-    paths are read from the PR's commits and files endpoints respectively.
+    paths are read from the PR's commits and files endpoints respectively,
+    following pagination to the end in both cases.
     """
     with httpx.Client(headers=_headers(), timeout=30.0) as client:
         pr = _get(client, f"/repos/{owner}/{repo}/pulls/{number}")
-        commits = _get(client, f"/repos/{owner}/{repo}/pulls/{number}/commits")
-        files = _get(client, f"/repos/{owner}/{repo}/pulls/{number}/files")
+        commits = _get_all(client, f"/repos/{owner}/{repo}/pulls/{number}/commits")
+        files = _get_all(client, f"/repos/{owner}/{repo}/pulls/{number}/files")
+
+    ref = f"{owner}/{repo}#{number}"
+    _check_complete("commits", len(commits), pr.get("commits"), ref)
+    _check_complete("changed files", len(files), pr.get("changed_files"), ref)
 
     commit_messages = tuple(
         (str(c["sha"]), str(c["commit"]["message"]))
