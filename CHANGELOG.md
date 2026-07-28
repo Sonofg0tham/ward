@@ -59,12 +59,12 @@ Benchmark, current trunk vs the committed v0.2.3 reports:
 | | v0.2.3 | now |
 |---|---|---|
 | Smoke (50-row samples) | 75.2% recall, 0.0% FPR | 75.2% recall, 0.0% FPR |
-| Full corpus, blocking (`fail-on: high`) | 53.5% recall, 0.0% FPR | **54.3%** recall, 0.0% FPR |
-| Full corpus, reporting (`fail-on: medium`) | — | **56.2%** recall, 0.6% FPR |
+| Full corpus, blocking (`fail-on: high`) | 53.5% recall, 0.0% FPR | **54.1%** recall, 0.0% FPR |
+| Full corpus, reporting (`fail-on: medium`) | — | **56.0%** recall, 0.6% FPR |
 
-So the rule work is a net detection *gain* on the real corpora — 569 of the
+So the rule work is a net detection *gain* on the real corpora — 567 of the
 1,048 in-scope injection rows caught at the blocking threshold against 561 at
-v0.2.3, so **8 more rows** — while removing the classes of build-blocking
+v0.2.3, so **6 more rows** — while removing the classes of build-blocking
 false positive listed under **Fixed** below, with the FPR still 0.0% across
 all 343 benign rows.
 
@@ -74,9 +74,10 @@ which no run reproduced — nobody had re-run the benchmark after the rule
 work, so the headline number in a detection tool's README was wrong, and
 wrong in the flattering direction. And the row-delta above first read "26
 more injection rows", derived by multiplying a recall *percentage* difference
-rather than counting rows; the real figure is 8. A changelog is a claim about
-what happened, so the numbers in it get the same treatment as the ones the
-tool prints.
+rather than counting rows; counted properly it was 8 at the time, and 6 after
+the false-positive work in the round that followed. A changelog is a claim
+about what happened, so the numbers in it get the same treatment as the ones
+the tool prints.
 
 ### Security
 

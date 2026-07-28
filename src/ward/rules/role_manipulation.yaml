@@ -53,7 +53,13 @@
     # stand alone. "debug mode" is dropped entirely - the DAN canon is
     # "Developer Mode", and "enable debug mode with --verbose" is a sentence
     # real projects write.
-    - '(?i)\b(?:jailbreak\s+mode|unrestricted\s+mode|god\s+mode)\b'
+    - '(?i)\b(?:jailbreak\s+mode|unrestricted\s+mode)\b'
+    # "god mode" alone is game-dev and ops vocabulary - "the service role
+    # key is effectively a god mode key" is a sentence a security doc
+    # writes, and "enabling god mode in the sandbox build" is a sentence a
+    # game project writes. At HIGH both hard-failed the build. It needs the
+    # sentence to be ASKING for the mode, not describing one.
+    - '(?i)\b(?:enter|enable|activate|switch\s+to|turn\s+on|you\s+are\s+in|now\s+in)\s+(?:\w+\s+){0,2}god\s+mode\b'
     - '(?i)\b(?:enter|enable|activate|switch\s+to|go\s+into|you\s+are\s+(?:now\s+)?in)\s+(?:developer|admin)\s+mode\b'
     # The canonical DAN prompt puts the activation AFTER the phrase:
     # "act as ChatGPT with Developer Mode enabled". Requiring a leading

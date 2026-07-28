@@ -22,10 +22,10 @@
     # message or a PR body is not something any process legitimately emits
     # there, and the closing tag adds no information. Matching it alone is
     # linear and cannot be padded past.
-    - '(?i)<\s*tool[_\s]*call\s*>'
-    - '(?i)<\s*/\s*tool[_\s]*call\s*>'
-    - '(?i)<\s*function[_\s]*call\s*>'
-    - '(?i)<\s*invoke[_\s]*tool\s*>'
+    - '(?im)^[ \t>*#\-]{0,8}<\s*tool[_\s]*call\s*>'
+    - '(?im)^[ \t>*#\-]{0,8}<\s*/\s*tool[_\s]*call\s*>'
+    - '(?im)^[ \t>*#\-]{0,8}<\s*function[_\s]*call\s*>'
+    - '(?im)^[ \t>*#\-]{0,8}<\s*invoke[_\s]*tool\s*>'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject. Real tool calls are emitted by the model, not embedded in user-supplied text."
 
@@ -77,7 +77,7 @@
     # writing the agent's own reply for it, and nobody puts that label in
     # documentation. Requiring a second turn to fire broke exactly that case
     # (fixtures 27 and 45) while fixing the false positives below.
-    - '(?m)^[ \t]*(?:ASSISTANT|Assistant|SYSTEM|System|AI|A\.?I\.?)[ \t]*:[ \t]*(?:.{0,400})$'
+    - '(?m)^[ \t]*(?:ASSISTANT|Assistant|AI)[ \t]*:[ \t]*(?:.{0,400})$'
     # USER / HUMAN / TOOL / FUNCTION alone are not. One labelled line is a
     # table or a heading, and all three of these hard-failed a build at HIGH:
     #   User: admin                    <- seeded-account docs
@@ -87,7 +87,7 @@
     # turn by a DIFFERENT speaker. That keeps a column of "User: alice /
     # User: bob" in a permissions table benign. Line counts are bounded so
     # the pattern stays linear.
-    - '(?m)^[ \t]*(?P<speaker>USER|HUMAN|TOOL|FUNCTION|User|Human|Tool|Function)[ \t]*:[ \t]*[^\n]{0,400}(?:\r?\n[^\n]{0,400}){0,6}?\r?\n[ \t]*(?!(?P=speaker)[ \t]*:)(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION|User|Human|Assistant|Tool|Function|SYSTEM|System)[ \t]*:'
+    - '(?m)^[ \t]*(?P<speaker>USER|HUMAN|TOOL|FUNCTION|SYSTEM|User|Human|Tool|Function|System)[ \t]*:[ \t]*[^\n]{0,400}(?:\r?\n[^\n]{0,400}){0,6}?\r?\n[ \t]*(?!(?P=speaker)[ \t]*:)(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION|User|Human|Assistant|Tool|Function|SYSTEM|System)[ \t]*:'
   surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
   remediation: "Reject. Untrusted text simulating a conversation turn is an injection precursor."
 

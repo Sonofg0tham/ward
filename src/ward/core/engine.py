@@ -9,7 +9,7 @@ from ..detectors import ALL_DETECTOR_CLASSES
 from ..detectors.base import Detector
 from .models import Finding, ScanInput, ScanReport, Severity, Surface
 from .normalise import (
-    decode_candidates,
+    decode_candidates_tagged,
     decode_unicode_tags,
     evasion_forms,
     extract_suppressions,
@@ -84,18 +84,25 @@ def build_input(
         if form and form != normalised and form not in decoded:
             decoded.append(form)
 
-    decoded_payloads: list[str] = []
-    for form in decode_candidates(text):
+    # Only BLOB decodes are eligible for identifier-splitting below. A
+    # "whole" candidate is a transform of the entire input, and splitting one
+    # replaces every full stop in the document with a space - fusing unrelated
+    # sentences into instructions nobody wrote. One "&lt;" or "%20" anywhere
+    # in a file was enough to trigger it.
+    blob_payloads: list[str] = []
+    for kind, form in decode_candidates_tagged(text):
         _add(form)
-        decoded_payloads.append(form)
+        if kind == "blob":
+            blob_payloads.append(form)
     # Also decode the NORMALISED text. A single zero-width character dropped
     # inside a base64 or hex blob makes the raw text undecodable, so scanning
     # only the raw form meant one invisible character was enough to stop the
     # payload ever being decoded and rescanned.
     if normalised != text:
-        for form in decode_candidates(normalised):
+        for kind, form in decode_candidates_tagged(normalised):
             _add(form)
-            decoded_payloads.append(form)
+            if kind == "blob":
+                blob_payloads.append(form)
 
     # Text forms the evasion transforms should be applied to. Identifier
     # surfaces get both, because git forbids spaces in ref names: any
@@ -124,7 +131,7 @@ def build_input(
     # any multi-word payload in a branch name MUST be delimited - which meant
     # base64 of a branch-shaped payload was the natural encoding to reach for
     # and the one guaranteed to get through.
-    for payload in decoded_payloads:
+    for payload in blob_payloads:
         split_payload = split_identifier(payload)
         if split_payload != payload:
             _add(split_payload)

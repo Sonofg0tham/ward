@@ -503,33 +503,43 @@ def _looks_like_text(s: str) -> bool:
     return any(ch in _WORD_SEPARATORS for ch in s)
 
 
-def _try_decodings(text: str) -> list[str]:
-    """One-pass decode attempts. Returns every decoded form (text-like or not).
+def _try_decodings(text: str) -> list[tuple[str, str]]:
+    """One-pass decode attempts, each tagged with the decoder that made it.
+
+    The tag is load-bearing, not bookkeeping. "whole" candidates are
+    transforms of the ENTIRE input (percent, HTML entity,
+    quoted-printable); "blob" candidates are the contents of an encoded
+    run found inside it. Only the latter can be a branch-shaped payload
+    whose words are hidden behind git separators, and only the latter may
+    have identifier-splitting applied - doing it to a whole document
+    deletes its sentence boundaries and fuses unrelated prose.
+
+    Returns every decoded form (text-like or not).
 
     The caller is responsible for deciding which to keep and which to
     recurse into.
     """
-    candidates: list[str] = []
+    candidates: list[tuple[str, str]] = []
 
     if "%" in text:
         try:
             decoded = urllib.parse.unquote(text, errors="strict")
             if decoded != text:
-                candidates.append(decoded)
+                candidates.append(("whole", decoded))
         except UnicodeDecodeError:
             pass
 
     if "&" in text:
         unescaped = html.unescape(text)
         if unescaped != text:
-            candidates.append(unescaped)
+            candidates.append(("whole", unescaped))
 
     if "=" in text:
         try:
             qp_bytes = quopri.decodestring(text.encode("ascii", errors="ignore"))
             qp_text = qp_bytes.decode("utf-8", errors="strict")
             if qp_text != text:
-                candidates.append(qp_text)
+                candidates.append(("whole", qp_text))
         except (UnicodeDecodeError, ValueError):
             pass
 
@@ -566,7 +576,7 @@ def _try_decodings(text: str) -> list[str]:
             seen_blobs.add(("b64", blob))
             try:
                 payload = base64.b64decode(blob, validate=True)
-                candidates.append(payload.decode("utf-8", errors="strict"))
+                candidates.append(("blob", payload.decode("utf-8", errors="strict")))
             except (binascii.Error, ValueError, UnicodeDecodeError):
                 continue
 
@@ -581,7 +591,7 @@ def _try_decodings(text: str) -> list[str]:
             translated = blob.translate(str.maketrans("-_", "+/"))
             try:
                 payload = base64.b64decode(translated + "==", validate=False)
-                candidates.append(payload.decode("utf-8", errors="strict"))
+                candidates.append(("blob", payload.decode("utf-8", errors="strict")))
             except (binascii.Error, ValueError, UnicodeDecodeError):
                 continue
 
@@ -592,14 +602,16 @@ def _try_decodings(text: str) -> list[str]:
             seen_blobs.add(("hex", blob))
             try:
                 payload = bytes.fromhex(blob)
-                candidates.append(payload.decode("utf-8", errors="strict"))
+                candidates.append(("blob", payload.decode("utf-8", errors="strict")))
             except (ValueError, UnicodeDecodeError):
                 continue
 
     return candidates
 
 
-def decode_candidates(text: str, *, _depth: int = 0, _budget: list[int] | None = None) -> list[str]:
+def _decode_candidates_tagged(
+    text: str, *, _depth: int = 0, _budget: list[int] | None = None
+) -> list[tuple[str, str]]:
     """Find encoded blocks and return their decoded UTF-8 forms.
 
     Handles base64 (standard and URL-safe), hex, URL-encoding, HTML
@@ -616,8 +628,8 @@ def decode_candidates(text: str, *, _depth: int = 0, _budget: list[int] | None =
     if _budget[0] <= 0:
         return []
 
-    out: list[str] = []
-    for candidate in _try_decodings(text):
+    out: list[tuple[str, str]] = []
+    for kind, candidate in _try_decodings(text):
         if not candidate or candidate == text:
             continue
         # KEEP THE CANDIDATE BEFORE SPENDING ANY BUDGET. The budget exists to
@@ -635,7 +647,7 @@ def decode_candidates(text: str, *, _depth: int = 0, _budget: list[int] | None =
         # passes a WARN. The bigger the surrounding text, the more reliably
         # the payload was missed.
         if _looks_like_text(candidate):
-            out.append(candidate)
+            out.append((kind, candidate))
         _budget[0] -= len(candidate)
         if _budget[0] <= 0:
             # Stop going deeper, but keep scanning siblings at this level.
@@ -643,5 +655,29 @@ def decode_candidates(text: str, *, _depth: int = 0, _budget: list[int] | None =
         # Recurse even when the candidate failed the text gate: an
         # intermediate base64-of-base64 layer is dense and would fail it,
         # but its decoded child may not.
-        out.extend(decode_candidates(candidate, _depth=_depth + 1, _budget=_budget))
+        # A blob found inside a blob is still a blob; anything found inside
+        # a whole-document transform inherits that framing too.
+        out.extend(
+            (kind, nested)
+            for _, nested in _decode_candidates_tagged(
+                candidate, _depth=_depth + 1, _budget=_budget
+            )
+        )
     return out
+
+
+def decode_candidates(text: str) -> list[str]:
+    """Every decoded form of ``text``, in discovery order."""
+    return [form for _, form in _decode_candidates_tagged(text)]
+
+
+def decode_candidates_tagged(text: str) -> list[tuple[str, str]]:
+    """As :func:`decode_candidates`, but each form paired with its decoder.
+
+    ``"blob"`` means the form came out of an encoded run found inside the
+    input; ``"whole"`` means it is a transform of the entire input. Callers
+    that reshape a payload - splitting identifier separators, for instance -
+    must only do so to blob forms, because reshaping a whole document
+    destroys the sentence boundaries its rules depend on.
+    """
+    return _decode_candidates_tagged(text)

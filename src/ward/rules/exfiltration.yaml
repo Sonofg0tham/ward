@@ -26,7 +26,7 @@
     # Direction is the discriminator. Exfiltration needs a body-carrying flag
     # (-d / -F / -T / --data / --form / --upload-file) AND a local secret as
     # the thing being carried. An Authorization header is neither.
-    - '(?is)curl\b[^\n]{0,200}?(?:\s-(?:d|F|T)\b|--data(?:-raw|-binary|-urlencode)?\b|--form\b|--upload-file\b)[^\n]{0,140}?(?:\$\{?[A-Z_]*(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL)[A-Z_]*\}?|[@~./][^\s]*(?:\.env|\.aws/credentials|\.git/config|id_rsa)|\$\(\s*(?:cat|printenv|env)\b|\benv\s*\||\bprintenv\b|\bsecrets?\b|\bcredentials?\b|\bfindings?\b|system\s+prompt)'
+    - '(?is)curl\b[^\n]{0,200}?(?:\s-(?:d|F|T)\b|--data(?:-raw|-binary|-urlencode)?\b|--form\b|--upload-file\b)[^\n]{0,140}?(?:\$\{?[A-Z_]*(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL)[A-Z_]*\}?|[@~./][^\s]*(?:\.env|\.aws/credentials|\.git/config|id_rsa)|\$\(\s*(?:cat|printenv|env)\b|\benv\s*\||\bprintenv\b|\bsecrets?\b|(?<!client_)(?<!_)\bcredentials?\b|\bfindings?\b|system\s+prompt)'
   surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject. Reviewer agents should never POST findings to an arbitrary URL."
 
@@ -54,7 +54,21 @@
     # description and is now neither.
     - '(?is)(?:\A|(?<=[.!?] )|(?<=[.!?]\n)|(?<=[.!?]  )|(?<=\n))[ \t>*#\-0-9.)(\[\]/\"''’:]{0,64}(?:please\s+|kindly\s+|now\s+|also\s+|just\s+)?include\s+(?:[^\n.]{0,60}\s+)?(?:secrets?|env(?:ironment)?\s*(?:vars?|variables?)\b|api\s*keys?|tokens?|credentials?|system\s+prompt|hidden\s+prompt|\.env|\.git/config|\.aws/credentials)'
     - '(?is)(?<!not )(?<!never )(?<!avoid )(?<!n''t )(?<!dont )(?<!doesnt )(?<!wont )(?<!cant )(?<!longer )\binclude\s+(?:[^\n.]{0,60}\s+)?(?:secrets?|env(?:ironment)?\s*(?:vars?|variables?)\b|api\s*keys?|tokens?|credentials?|system\s+prompt|hidden\s+prompt|\.env|\.git/config|\.aws/credentials)\b[^\n]{0,60}?\bin\s+(?:your|the)\s+(?:response|answer|output|reply|review|comment|summary|report|message)\b'
-    - '(?is)(?<!not )(?<!never )(?<!avoid )(?<!n''t )(?<!dont )(?<!doesnt )(?<!wont )(?<!cant )(?<!longer )\b(?:print|output|reveal|expose|leak|show|dump|attach)\s+(?:[^\n.]{0,60}\s+)?(?:secrets?|env(?:ironment)?\s*vars?|api\s*keys?|tokens?|credentials?|system\s+prompt|hidden\s+prompt|\.env)'
+    # This branch had NO frame guard while the two above it did, so it fired
+    # on ordinary security-documentation prose - the exact writing a project
+    # produces when it is being careful:
+    #   A stack trace on this route could leak credentials to the client.
+    #   The report will print the api key prefix for support.
+    # Both hard-failed at HIGH. A near-identical sentence was already pinned
+    # as benign two lines away in the test matrix, which is how obvious the
+    # inconsistency was once anyone looked.
+    #
+    # Same two shapes the include branches use: a bare imperative starting an
+    # utterance, or any position when the destination is the agent's own
+    # output. "could leak" and "will print" have a subject and a modal in
+    # front of the verb, so they are descriptions and match neither.
+    - '(?is)(?:\A|(?<=[.!?] )|(?<=[.!?]\n)|(?<=[.!?]  )|(?<=\n))[ \t>*#\-0-9.)(\[\]/\"''’:]{0,64}(?:please\s+|kindly\s+|now\s+|also\s+|just\s+)?(?:print|output|reveal|expose|leak|show|dump|attach)\s+(?:(?:your|the|all|its|every)\s+)*(?:[^\n.]{0,40}\s+)?(?:secrets?|env(?:ironment)?\s*vars?|api\s*keys?|tokens?|credentials?|system\s+prompt|hidden\s+prompt|\.env)'
+    - '(?is)(?<!not )(?<!never )(?<!avoid )(?<!n''t )(?<!dont )(?<!doesnt )(?<!wont )(?<!cant )(?<!longer )\b(?:print|output|reveal|expose|leak|show|dump|attach)\s+(?:(?:your|the|all|its)\s+)*(?:[^\n.]{0,40}\s+)?(?:secrets?|env(?:ironment)?\s*vars?|api\s*keys?|tokens?|credentials?|system\s+prompt|hidden\s+prompt|\.env)\b[^\n]{0,60}?\bin\s+(?:your|the)\s+(?:response|answer|output|reply|review|comment|summary|report|message)\b'
   surfaces: [pr_body, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
