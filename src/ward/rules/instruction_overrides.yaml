@@ -42,12 +42,12 @@
     # The leading class covers the decoration a real payload hides behind:
     # blockquote, list bullet, heading, ordered-list number, and comment
     # markers. Bounded and horizontal-only so the pattern stays linear.
-    - '(?im)^[ \t>*#\-0-9.)(\[\]/"''’:]{0,24}ignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
+    - '(?im)^[ \t>*#\-0-9.)(\[\]/"''’:]{0,64}ignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:instructions?|prompts?|directives?|system\s+prompt)\b'
     # Ambiguous nouns are line-anchored too: "fix: ignore rules with an empty
     # selector" and "the linter is configured to ignore rules inside
     # generated/" are sentences real projects write mid-sentence, but a bare
     # imperative at the start of a line is still signal.
-    - '(?im)^[ \t>*#\-0-9.)(\[\]/"''’:]{0,24}ignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:directions?|commands?|orders?|rules?)\b'
+    - '(?im)^[ \t>*#\-0-9.)(\[\]/"''’:]{0,64}ignore\s+(?:all\s+|any\s+|every\s+|the\s+|those\s+|these\s+)*(?:directions?|commands?|orders?|rules?)\b'
     - '(?i)\bignore\s+(?:all\s+|any\s+|every\s+)?(?:the\s+|your\s+|my\s+)?(?:previous|prior|preceding|above|earlier|original)\s+(?:directions?|commands?|orders?|rules?)\b'
     - '(?i)(?:don[''’]?t|do\s+not)\s+(?:follow|obey|adhere\s+to|listen\s+to|respect)\s+(?:any\s+|all\s+|the\s+)?(?:previous|prior|above|earlier|original)?\s*(?:instructions?|prompts?|requests?|commands?|rules?|directions?)'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
@@ -154,7 +154,7 @@
     # not. Anchor rather than delete - deleting dropped the attack entirely.
     # "update" stays out: it is the one verb with heavy benign imperative use
     # in commit subjects, and override/replace carry the takeover meaning.
-    - '(?im)^[ \t>*#\-0-9.)(]{0,24}(?:please\s+|now\s+)?(?:override|replace|ignore\s+and\s+replace)\s+(?:the|all|any)\s+(?:instructions?|prompts?|guidelines?|directives?|rules?)\b'
+    - '(?im)^[ \t>*#\-0-9.)(]{0,64}(?:please\s+|now\s+)?(?:override|replace|ignore\s+and\s+replace)\s+(?:the|all|any)\s+(?:instructions?|prompts?|guidelines?|directives?|rules?)\b'
   surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
 
