@@ -256,6 +256,16 @@ the tool prints.
   test_benchmark_claims.py` now checks that the percentage, the row counts
   and the row delta agree with each other, and that README, SECURITY and
   CHANGELOG quote the same figure.
+- **The CI self-scan step could not fail, so nobody read it.** It carries
+  `continue-on-error: true`, permanently and for a real reason: Ward's own
+  commit messages describe the attacks it catches and its own fixture
+  filenames are payloads, so `scan-local` on this repository always exits 2
+  and `.wardignore` cannot help — it suppresses file content, not commit
+  metadata. That is also how the logo false positive above stayed green for a
+  round. The gate now lives in `tests/test_self_scan_gates.py`, which asserts
+  the self-scan reports nothing on the surfaces `.wardignore` does cover, plus
+  a control that it is still reading commit metadata at all — without that,
+  the guard would pass on an empty scan.
 - **Six audit scratch files were published in the package root.** `_audit_fp.py`,
   `_audit_scan.py`, `audit_clean.py`, `audit_coverage.py`, `audit_fixtures.py`
   and `audit_rulegen.py` were committed by a careless `git add -A` during an

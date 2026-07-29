@@ -59,10 +59,19 @@ jobs:
         run: pip install -e .
 
       - name: scan-local
-        # Self-scan is informational. A security tool that describes the
-        # attacks it catches will inevitably trigger its own rules; the
-        # ward-allow-file directive handles most of it, but `continue-on-error`
-        # keeps any remaining hit informational rather than gating.
+        # Informational, and permanently so. Ward's own commit messages
+        # describe the attacks it catches and its own fixture FILENAMES are
+        # payloads, so scan-local on this repository always exits 2 and
+        # .wardignore cannot help - it suppresses file content, not commit
+        # metadata or names.
+        #
+        # THE GATE LIVES IN tests/test_self_scan_gates.py, not here. This step
+        # swallowing exit 2 is how a false positive on Ward's own logo -
+        # obf.mixed_script at HIGH on assets/social-preview.png, which meant
+        # no repository with a binary asset could commit - was reported green
+        # for a whole round. That test asserts the self-scan reports nothing
+        # on the surfaces .wardignore covers, which is a check this repo can
+        # actually pass and which would have been red the day it appeared.
         continue-on-error: true
         run: ward scan-local --format sarif > ward-self.sarif
 
