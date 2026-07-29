@@ -112,10 +112,26 @@ def parse_verdict(raw_json_text: str) -> JudgeVerdict:
     Defensive: clamps confidence to [0, 1], coerces an unknown technique to
     "none", and truncates reasoning. A structured-output response should
     already be valid JSON; this guards against partial or malformed output.
+
+    ``is_injection`` is the exception to "coerce and carry on". It is the
+    verdict, so a response that omits it is a response we could not read, and
+    reading it as False would report clean on the strength of a missing field.
     """
     data = json.loads(raw_json_text)
     if not isinstance(data, dict):
         raise ValueError("judge response was not a JSON object")
+    # The one field that must not default. Everything below this line is
+    # defensive in the safe direction - confidence clamps to [0, 1], an
+    # unknown technique becomes "none", reasoning truncates - but reading a
+    # missing `is_injection` as False would mean a judge that answered in a
+    # shape we did not expect silently reports clean. The caller turns this
+    # into JudgeError and `ward judge` exits 2 on JudgeError, so raising is
+    # both fail-closed and already wired up.
+    if "is_injection" not in data:
+        raise ValueError(
+            "judge response has no 'is_injection' field; refusing to read a "
+            f"missing verdict as clean (got keys: {sorted(data)})"
+        )
     try:
         confidence = float(data.get("confidence", 0.0))
     except (TypeError, ValueError):

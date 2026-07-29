@@ -72,3 +72,23 @@ def test_no_unexpected_invisible_characters(path: pathlib.Path) -> None:
         f"{path.name}: literal invisible characters {[hex(ord(c)) for c in offenders]}. "
         f"Rule packs reference these as escapes, never as codepoints."
     )
+
+
+# --- the judge tier's verdict field must not default -----------------------
+
+
+def test_a_missing_verdict_field_is_an_error_not_a_clean_bill() -> None:
+    """`parse_verdict` coerces almost everything, and must not coerce this.
+
+    Confidence clamps, an unknown technique becomes "none", reasoning
+    truncates - all safe directions. `is_injection` defaulting to False would
+    mean a judge that answered in an unexpected shape silently reports clean,
+    which is the one outcome the judge tier exists to prevent.
+    """
+    from ward.judge.prompt import parse_verdict
+
+    with pytest.raises(ValueError, match="is_injection"):
+        parse_verdict('{"confidence": 0.9, "technique": "instruction_override"}')
+
+    assert parse_verdict('{"is_injection": false}').is_injection is False
+    assert parse_verdict('{"is_injection": true, "confidence": 0.9}').is_injection is True
