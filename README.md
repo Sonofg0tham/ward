@@ -23,7 +23,7 @@ traditional security tools ignore.
 
 - **Smoke** (bundled 50-row samples, offline): 75.2% in-scope recall,
   0.0% false-positive rate.
-- **Full corpus** (`ward bench --download`, 1,391 real rows): **54.4%
+- **Full corpus** (`ward bench --download`, 1,391 real rows): **53.9%
   in-scope recall, 0.0% false-positive rate** across Lakera, deepset,
   and Spikee. AdvBench is a deliberate ceiling test at 0%.
   At `--fail-on medium` the same corpora give 56.3% recall for 0.6% FPR.

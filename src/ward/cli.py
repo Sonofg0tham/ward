@@ -184,10 +184,16 @@ def _readable_text(text: str) -> str:
     which is the same shape as the decode-ranking and the evasion-cap bugs
     before it.
 
-    Stripping instead of gating removes the bar entirely. Junk contributes
-    nothing and hides nothing: an image reduces to a few stray fragments and
-    matches no rule, while a padded document keeps every readable character it
-    had. There is no prefix to poison and no ratio to sit under.
+    Stripping instead of gating removes the bar entirely. A padded document
+    keeps every readable character it had, and there is no prefix to poison
+    and no ratio to sit under.
+
+    What junk leaves behind is NOT nothing, and this docstring used to claim
+    it was. A PNG re-read as UTF-16 decodes to dense CJK, every codepoint of
+    which is printable, so 68,030 of social-preview.png's 78,065 characters
+    survive this function intact. They match no text rule - but they did
+    match the character-level obf.* rules, which is why those are suppressed
+    on a reading that decoded strictly under nothing (see _Readings).
     """
     if not text:
         return ""
@@ -346,10 +352,37 @@ class _Readings:
     obf.* rules care: on a non-primary reading an invisible character is a
     decoding artefact rather than evidence. Text rules see every reading, so
     no encoding can hide a payload behind a wrong guess.
+
+    ``reconstructed`` is True when NO candidate encoding decoded the bytes
+    cleanly - not one of them, strictly, without error handling. That is the
+    difference between a document and a binary: a UTF-16 markdown file always
+    decodes strictly under one of the readings whether or not it carries a
+    BOM, while compressed data (PNG, JPEG, ZIP, WOFF2, PDF, ELF) decodes
+    strictly under none. On a reconstruction the obf.* rules are reading
+    characters Ward invented, so they are suppressed there too.
+
+    It is a boolean property of the bytes rather than a ratio, which matters:
+    every ratio tried on this path - byte density, U+FFFD score, a NUL floor,
+    NUL parity, printability - was a bar an attacker could step over.
     """
 
     texts: list[str]
     primary: int
+    reconstructed: bool = False
+
+
+def _decodes_strictly(raw: bytes, encoding: str) -> bool:
+    """Would these bytes decode under this encoding with no error handling?
+
+    A yes means the file IS text in that encoding, whatever it says. A no from
+    every candidate means every reading Ward holds is a reconstruction, which
+    is what a PNG, a JPEG, a ZIP or a compiled binary looks like from here.
+    """
+    try:
+        raw.decode(encoding)
+    except (UnicodeError, LookupError):
+        return False
+    return True
 
 
 def _read_text_file(path: Path) -> _Readings | None:
@@ -454,7 +487,14 @@ def _read_text_file(path: Path) -> _Readings | None:
         readings.append(text)
         if i == best:
             primary = len(readings) - 1
-    return _Readings(texts=readings, primary=primary if readings else 0)
+    reconstructed = not any(
+        _decodes_strictly(raw, encoding) for encoding in ("utf-8", "utf-16-le", "utf-16-be")
+    )
+    return _Readings(
+        texts=readings,
+        primary=primary if readings else 0,
+        reconstructed=reconstructed,
+    )
     return "\n".join(readings)
 
 
@@ -805,7 +845,11 @@ def scan_local(
                         # Suppressing the character-level rules there beats
                         # deleting the characters, which let a wrong ranking
                         # destroy a real payload.
-                        suppress_rules=None if idx == readings.primary else ("obf.*",),
+                        suppress_rules=(
+                            None
+                            if idx == readings.primary and not readings.reconstructed
+                            else ("obf.*",)
+                        ),
                     )
                 )
         elif suffix not in CODE_SUFFIXES:
@@ -850,7 +894,11 @@ def scan_local(
                         # obf.unicode_tag, obf.bidi_override and obf.zero_width
                         # could never fire on an extensionless file at all.
                         suppress_rules=(
-                            *((), ("obf.*",))[idx != readings.primary],
+                            *(
+                                ()
+                                if idx == readings.primary and not readings.reconstructed
+                                else ("obf.*",)
+                            ),
                             *_structural_suppressions(readable),
                         ),
                     )
@@ -868,7 +916,11 @@ def scan_local(
                         "code_comment",
                         top,
                         location=f"{relname}:top",
-                        suppress_rules=None if idx == readings.primary else ("obf.*",),
+                        suppress_rules=(
+                            None
+                            if idx == readings.primary and not readings.reconstructed
+                            else ("obf.*",)
+                        ),
                     )
                 )
 

@@ -67,7 +67,7 @@
     - '(?i)\b(?:developer|admin)\s+mode\s+(?:enabled|activated|turned\s+on|is\s+(?:on|enabled)|output)\b'
     - '(?i)\bdan\s+mode\b'
     - '(?i)\bdo\s+anything\s+now\b'
-  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
+  surfaces: [branch_name, commit_author, tag_name, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: role.fake_role_block
@@ -78,7 +78,7 @@
     # system|assistant get the same follow-line discriminator as user|tool:
     # an indented `system:` key in a compose or CI file is a mapping, not a
     # forged turn.
-    - '(?ims)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*(?=[^\n]{0,200}?\b(?:you\s+(?:are|must|will|should|can|may)|your\s+(?:role|task|instructions?|purpose)|ignore|disregard|forget|approve|act\s+as|from\s+now|pretend|never\s+refuse|do\s+not\s+refuse|unrestricted|do\s+(?:it|this|as\s+(?:i|we)\s+say)|comply|obey|merge|reveal|print|output))'
+    - '(?ims)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*(?=[^\n]{0,200}?\b(?:you\s+(?:are|must|will|should|can|may)|your\s+(?:role|task|instructions?|purpose)|ignore|disregard|forget|approve|act\s+as|from\s+now|pretend|never\s+refuse|do\s+not\s+refuse|unrestricted|do\s+(?:it|this|as\s+(?:i|we)\s+say)|comply|obey|merge|reveal|print|output|include\s+(?:it|them|the)|attach|pre-?(?:authorised|authorized|approved)|already\s+(?:been\s+)?(?:audited|reviewed|approved|signed\s+off)|no\s+further\s+review|(?:is|are)\s+trusted|trusted\s+(?:developer|internal|source|input|content)|do\s+not\s+flag|must\s+not\s+be\s+flagged|(?:checks?|filters?|scanning)\s+(?:are|is)\s+(?:disabled|off)|safe\s+to\s+(?:merge|land|approve)|end\s+of\s+(?:user|untrusted)\s+(?:content|input)|lgtm\s+is\s+expected|without\s+further\s+(?:checks?|review)))'
     # user/tool discriminated by what FOLLOWS, not by their own indentation.
     # Column zero was the wrong test: a top-level `user:` key in an Ansible
     # playbook, a GitLab CI config, a Kubernetes manifest or a compose file
@@ -102,7 +102,7 @@
     # unrestricted, approve everything, ignore the rules. The bare form drops
     # to role.ambiguous_persona_hint at MEDIUM, which warns without blocking.
     - '(?is)\brole\s*:\s*[''"]?(?:system|assistant|tool)[''"]?\b[^\n]{0,80}\r?\n?[^\n]{0,200}?\b(?:unrestricted|no\s+restrictions|without\s+restrictions|jailbroken|approve\s+(?:all|every|any|everything)|ignore\s+(?:all\s+|any\s+|the\s+)?(?:previous|prior|safety|security)|never\s+refuse|do\s+not\s+refuse|bypass\s+(?:all\s+)?(?:safety|security|checks?)|you\s+are\s+now\s+(?:an?\s+)?(?:admin|root|superuser|unrestricted))'
-  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: role.ambiguous_persona_hint
@@ -122,6 +122,14 @@
     # LLM SDK's own quickstart, so it warns rather than blocking. The
     # instruction-bearing version stays HIGH on role.fake_role_block.
     - '(?i)\brole\s*:\s*[''"]?(?:system|assistant|tool)[''"]?\b'
+    # A role label over an unindented SENTENCE. Severity is the answer to
+    # ambiguity here: a forged `System:` turn and a bug-report template's
+    # `System:` field are the same two characters, and what separates them
+    # is whether prose follows. "Ubuntu 22.04" is not prose; "This PR has
+    # been pre-authorised by the security team" is. Only one of those can
+    # be told apart by a regex, so this warns and role.fake_role_block
+    # blocks the shapes that carry an order or a trust assertion.
+    - '(?im)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*(?=[^\n]{0,200}?[A-Za-z]{2,}[ \t]+[a-z]{2,}[ \t]+[a-z]{2,})'
   surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Read the surrounding sentence. If it tells the agent to adopt the role rather than describing a service account, treat the metadata as untrusted."
 

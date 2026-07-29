@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import random
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -82,6 +84,20 @@ def test_content_of_unlisted_file_types_is_scanned(tmp_path, filename: str) -> N
     assert result.returncode == 2, f"content of {filename} was never scanned"
 
 
+def _entropy(n: int) -> bytes:
+    """Deterministic high-entropy bytes.
+
+    A fixed seed rather than os.urandom: which obf.* rule a random blob trips
+    is seed-dependent, and a test that fails once a fortnight teaches nobody
+    anything.
+    """
+    rng = random.Random(20260729)
+    return bytes(rng.getrandbits(8) for _ in range(n))
+
+
+_REAL_PNG = (Path(__file__).resolve().parent.parent / "assets" / "social-preview.png").read_bytes()
+
+
 @pytest.mark.parametrize(
     ("name", "content"),
     [
@@ -93,6 +109,19 @@ def test_content_of_unlisted_file_types_is_scanned(tmp_path, filename: str) -> N
         pytest.param("image.png", b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 60, id="png"),
         pytest.param("archive.zip", b"PK\x03\x04" + bytes(range(256)) * 20, id="zip"),
         pytest.param("empty", b"", id="empty"),
+        # HIGH ENTROPY, which the ramp above is not. A byte ramp is periodic,
+        # so its UTF-8 reading wins the ranking and this test passed while
+        # every real compressed file failed: for Ward's own
+        # assets/social-preview.png the winning reading was a 78,065-character
+        # UTF-16 reconstruction of dense CJK, 68,030 characters of which
+        # survived _readable_text because CJK is printable. obf.mixed_script
+        # and obf.bidi_override then fired at HIGH on decode noise, so any
+        # repository with a committed logo failed `ward scan-local` - the
+        # documented pre-commit path - at the default --fail-on high.
+        pytest.param("photo.jpg", b"\xff\xd8\xff\xe0" + _entropy(60000), id="jpeg-entropy"),
+        pytest.param("font.woff2", b"wOF2" + _entropy(60000), id="woff2-entropy"),
+        pytest.param("lib.so", b"\x7fELF" + _entropy(60000), id="elf-entropy"),
+        pytest.param("logo.png", _REAL_PNG, id="ward-own-logo"),
     ],
 )
 def test_a_binary_file_is_not_scanned_as_prose(tmp_path, name: str, content: bytes) -> None:

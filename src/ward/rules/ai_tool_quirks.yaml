@@ -76,7 +76,11 @@
   severity: high
   description: "Pseudo MCP tool-name collision (impersonating a known internal tool)"
   patterns:
-    - '(?i)\bmcp[._]tool[._]name\s*[:=]\s*["`]?(?:filesystem|github|shell|exec|terminal|http)["`]?'
-    - '(?i)\bregister[_-]?tool\s*\(\s*["`]?(?:filesystem|github|shell|exec|terminal|http)'
+    - '(?i)\bmcp[._]tool[._]name\s*[:=]\s*["`'']?(?:filesystem|github|shell|exec|terminal|http)["`'']?(?![\w-])'
+    # A call site is not a collision. registerTool("github", ...) is the
+    # documented @modelcontextprotocol/sdk API and this fired on it at HIGH,
+    # as a prefix match, so registerTool("execute_query") went too. What the
+    # rule is for is untrusted PROSE asserting a tool name, and the
+    # assignment form above covers that without reading source code.
   surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject. Untrusted text trying to register or shadow a tool name is an MCP-era injection signature."
