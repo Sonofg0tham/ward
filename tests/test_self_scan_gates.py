@@ -67,7 +67,11 @@ def test_self_scan_reports_nothing_on_suppressible_surfaces(self_scan: dict) -> 
     offenders = [
         f"{f['rule_id']} ({f['severity']}) on {f['surface']} at {f['location']}"
         for f in self_scan["findings"]
-        if f["surface"] in SUPPRESSIBLE_SURFACES
+        # scan_integrity findings are the scan describing its own coverage -
+        # "this file's bytes decoded as nothing, so the hidden-character rules
+        # did not run on it". That is the honest report on a committed logo,
+        # not a false positive, and .wardignore is not meant to hide it.
+        if f["surface"] in SUPPRESSIBLE_SURFACES and f["category"] != "scan_integrity"
     ]
     assert not offenders, (
         "scan-local reported findings on content surfaces that .wardignore covers:\n  "

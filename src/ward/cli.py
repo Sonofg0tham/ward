@@ -12,7 +12,7 @@ import json
 import re
 import sys
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated
 
@@ -192,8 +192,10 @@ def _readable_text(text: str) -> str:
     it was. A PNG re-read as UTF-16 decodes to dense CJK, every codepoint of
     which is printable, so 68,030 of social-preview.png's 78,065 characters
     survive this function intact. They match no text rule - but they did
-    match the character-level obf.* rules, which is why those are suppressed
-    on a reading that decoded strictly under nothing (see _Readings).
+    match the character-level obf.* rules at HIGH, which is why a finding from
+    a reading that had to be reconstructed is reported at MEDIUM (see
+    _Readings.obf_rules_are_trustworthy). Reported, not suppressed: silence
+    was a bypass worth three bytes.
     """
     if not text:
         return ""
@@ -353,22 +355,63 @@ class _Readings:
     decoding artefact rather than evidence. Text rules see every reading, so
     no encoding can hide a payload behind a wrong guess.
 
-    ``reconstructed`` is True when NO candidate encoding decoded the bytes
-    cleanly - not one of them, strictly, without error handling. That is the
-    difference between a document and a binary: a UTF-16 markdown file always
-    decodes strictly under one of the readings whether or not it carries a
-    BOM, while compressed data (PNG, JPEG, ZIP, WOFF2, PDF, ELF) decodes
-    strictly under none. On a reconstruction the obf.* rules are reading
-    characters Ward invented, so they are suppressed there too.
+    ``lossless[i]`` records whether reading ``i`` is a decode of the bytes
+    that needed no error handling at all. It is parallel to ``texts``.
 
-    It is a boolean property of the bytes rather than a ratio, which matters:
-    every ratio tried on this path - byte density, U+FFFD score, a NUL floor,
-    NUL parity, printability - was a bar an attacker could step over.
+    The previous version of this asked one question about the whole FILE -
+    "does any encoding decode these bytes strictly?" - and suppressed the
+    character-level obf.* rules everywhere when the answer was no. The bytes
+    of a file in a PR are written by the attacker, so that answer was written
+    by the attacker: one NUL to clear the clean-UTF-8 fast path, one invalid
+    UTF-8 byte, and an odd total length to break both UTF-16 decodes took a
+    markdown file carrying a Unicode TAG-block payload from FAIL to PASS with
+    the payload byte-for-byte unchanged. It was wrong in the other direction
+    too - 5% of real committed binaries DO decode strictly under some UTF-16
+    endianness, and a compiled .class file still raised obf.mixed_script at
+    HIGH and blocked the build.
+
+    Both failures come from letting a yes/no answer either silence a detector
+    or block a build. So the answer no longer does either: a lossy reading
+    still runs obf.*, but its findings are demoted to MEDIUM (see
+    ``demoted_rules`` in models.py). A PNG warns instead of failing; a
+    junk-padded payload is reported instead of vanishing; and there is
+    nothing left for the attacker to choose between.
     """
 
     texts: list[str]
     primary: int
-    reconstructed: bool = False
+    lossless: list[bool] = field(default_factory=list)
+
+    def obf_policy(self, idx: int, text: str) -> tuple[bool, bool]:
+        """How far to trust obf.* findings from reading ``idx``.
+
+        Returns ``(suppress, demote)``. Three answers, because two were not
+        enough - suppressing everything a decode could not verify was a
+        three-byte bypass, and demoting everything put a MEDIUM finding on
+        every committed logo.
+
+        * A NON-PRIMARY reading is an artefact of re-reading the same bytes
+          another way. Re-reading ". " as UTF-16-LE yields U+202E, which is
+          not in the document. Suppressed.
+        * The primary reading, decoded LOSSLESSLY: this is the document.
+          obf.* keeps its own severity.
+        * The primary reading, reconstructed with errors="replace", but still
+          scoring as text: real content Ward had to guess at. Demoted to
+          MEDIUM - reported, never blocking.
+        * Nothing that scores as text under any reading: a binary. Suppressed,
+          and the caller names the file in a scan.unverified_encoding finding
+          so the report states its own coverage.
+        """
+        if idx != self.primary:
+            return True, False
+        if idx < len(self.lossless) and self.lossless[idx]:
+            return False, False
+        # Zero is not a tuned threshold: it is where _text_score's rewards for
+        # ASCII and spacing exactly cancel its penalties for U+FFFD and NUL.
+        # Every real binary measured sits below it and every document above.
+        if _text_score(text) > 0:
+            return False, True
+        return True, False
 
 
 def _decodes_strictly(raw: bytes, encoding: str) -> bool:
@@ -427,6 +470,7 @@ def _read_text_file(path: Path) -> _Readings | None:
                 return _Readings(
                     texts=[raw.decode(encoding, errors="replace").lstrip("﻿")],
                     primary=0,
+                    lossless=[_decodes_strictly(raw, encoding)],
                 )
             except (UnicodeError, LookupError):  # pragma: no cover - defensive
                 break
@@ -453,13 +497,15 @@ def _read_text_file(path: Path) -> _Readings | None:
     # attempts at re-tuning the score could never have fixed it. A broken
     # UTF-8 decode is the signal that matters, and it costs nothing to check.
     if b"\x00" not in raw and text8.count("�") * 20 < max(1, len(text8)):
-        return _Readings(texts=[text8], primary=0)
+        return _Readings(texts=[text8], primary=0, lossless=[_decodes_strictly(raw, "utf-8")])
     candidates = [text8]
+    encodings = ["utf-8"]
     for encoding in ("utf-16-le", "utf-16-be"):
         try:
             candidates.append(raw.decode(encoding, errors="replace"))
         except (UnicodeError, LookupError):  # pragma: no cover - defensive
             continue
+        encodings.append(encoding)
 
     # Rank the readings, but NEVER let the ranking destroy content. Stripping
     # the losers meant a wrong guess deleted the payload: appending 2 KB of
@@ -481,19 +527,18 @@ def _read_text_file(path: Path) -> _Readings | None:
     # costs precision rather than opening a bypass.
     best = max(range(len(candidates)), key=lambda i: _text_score(candidates[i]))
     readings: list[str] = []
+    lossless: list[bool] = []
     for i, text in enumerate(candidates):
         if not text or text in readings:
             continue
         readings.append(text)
+        lossless.append(_decodes_strictly(raw, encodings[i]))
         if i == best:
             primary = len(readings) - 1
-    reconstructed = not any(
-        _decodes_strictly(raw, encoding) for encoding in ("utf-8", "utf-16-le", "utf-16-be")
-    )
     return _Readings(
         texts=readings,
         primary=primary if readings else 0,
-        reconstructed=reconstructed,
+        lossless=lossless,
     )
     return "\n".join(readings)
 
@@ -817,6 +862,10 @@ def scan_local(
     # A file we could not read is a file we did not scan. Silently skipping it
     # would report PASS over a gap of unknown size.
     unreadable: list[str] = []
+    # Files whose bytes decoded as nothing recognisable, so the character-level
+    # checks could not run on them. Named in the report rather than dropped -
+    # a check Ward did not perform is a fact about the scan's coverage.
+    unverified: set[str] = set()
     truncated: list[tuple[str, int]] = []
     for path in walk_tracked_files(repo):
         suffix = path.suffix.lower()
@@ -833,6 +882,9 @@ def scan_local(
                 unreadable.append(relname)
                 continue
             for idx, content in enumerate(readings.texts):
+                obf_suppress, obf_demote = readings.obf_policy(idx, content)
+                if obf_suppress and idx == readings.primary:
+                    unverified.add(relname)
                 inputs.append(
                     build_input(
                         "file_content",
@@ -845,11 +897,8 @@ def scan_local(
                         # Suppressing the character-level rules there beats
                         # deleting the characters, which let a wrong ranking
                         # destroy a real payload.
-                        suppress_rules=(
-                            None
-                            if idx == readings.primary and not readings.reconstructed
-                            else ("obf.*",)
-                        ),
+                        suppress_rules=("obf.*",) if obf_suppress else None,
+                        demote_rules=("obf.*",) if obf_demote else None,
                     )
                 )
         elif suffix not in CODE_SUFFIXES:
@@ -873,6 +922,9 @@ def scan_local(
             # Nothing is skipped on the strength of a ratio, so padding cannot
             # remove a file from the scan.
             for idx, content in enumerate(readings.texts):
+                obf_suppress, obf_demote = readings.obf_policy(idx, content)
+                if obf_suppress and idx == readings.primary:
+                    unverified.add(relname)
                 readable = _readable_text(content)
                 if not readable:
                     continue
@@ -894,13 +946,10 @@ def scan_local(
                         # obf.unicode_tag, obf.bidi_override and obf.zero_width
                         # could never fire on an extensionless file at all.
                         suppress_rules=(
-                            *(
-                                ()
-                                if idx == readings.primary and not readings.reconstructed
-                                else ("obf.*",)
-                            ),
+                            *((), ("obf.*",))[obf_suppress],
                             *_structural_suppressions(readable),
                         ),
+                        demote_rules=("obf.*",) if obf_demote else None,
                     )
                 )
         else:
@@ -909,6 +958,9 @@ def scan_local(
                 unreadable.append(relname)
                 continue
             for idx, content in enumerate(readings.texts):
+                obf_suppress, obf_demote = readings.obf_policy(idx, content)
+                if obf_suppress and idx == readings.primary:
+                    unverified.add(relname)
                 # Top-of-file comments only - cheap, high signal.
                 top = "\n".join(content.splitlines()[:40])
                 inputs.append(
@@ -916,11 +968,8 @@ def scan_local(
                         "code_comment",
                         top,
                         location=f"{relname}:top",
-                        suppress_rules=(
-                            None
-                            if idx == readings.primary and not readings.reconstructed
-                            else ("obf.*",)
-                        ),
+                        suppress_rules=("obf.*",) if obf_suppress else None,
+                        demote_rules=("obf.*",) if obf_demote else None,
                     )
                 )
 
@@ -965,6 +1014,28 @@ def scan_local(
             ),
         )
         for name in unreadable
+    ]
+    extra += [
+        Finding(
+            rule_id="scan.unverified_encoding",
+            detector="scan-local",
+            category="scan_integrity",
+            severity=Severity.MEDIUM,
+            message=(
+                "This file's bytes did not decode as text under any encoding, so the "
+                "hidden-character checks (invisible tags, bidi overrides, zero-width "
+                "runs) could not be run on it"
+            ),
+            surface="file_content",
+            location=name,
+            evidence=name,
+            remediation=(
+                "Expected for images, fonts and archives. If this should be a text "
+                "file, check what is in it - padding a document with undecodable "
+                "bytes is a way to keep the character-level rules from seeing it."
+            ),
+        )
+        for name in sorted(unverified)
     ]
     extra += [
         Finding(
@@ -1769,6 +1840,17 @@ def _heuristic_rule_doc(rule_id: str, _detector_cls: type) -> str | None:
             "Not a detection: a tracked file Ward could not read, so its contents\n"
             "were never scanned. Reported as a finding so the verdict cannot claim\n"
             "a clean result over a gap of unknown size."
+        ),
+        "scan.unverified_encoding": (
+            "scan.unverified_encoding\ncategory:    scan_integrity\nseverity:    medium\n"
+            "surfaces:    file_content\n\n"
+            "This file's bytes did not decode as text under any encoding Ward tries, so\n"
+            "the character-level rules (obf.unicode_tag, obf.bidi_override,\n"
+            "obf.zero_width, obf.mixed_script) were not run on it. Ordinary for images,\n"
+            "fonts and archives. On something that should be a text file it is worth a\n"
+            "look: padding a document with undecodable bytes is a way to stop those\n"
+            "rules seeing an invisible payload, and this finding is how the scan says\n"
+            "so rather than reporting the file clean."
         ),
         "scan.truncated_file": (
             "scan.truncated_file\ncategory:    scan_integrity\nseverity:    medium\n"

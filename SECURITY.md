@@ -187,8 +187,8 @@ Measured on the full 1,391-row corpus:
 
 | Threshold | In-scope recall | FPR | Behaviour |
 |-----------|-----------------|-----|-----------|
-| `high` (default) | 53.9% | **0.0%** | blocks the build |
-| `medium` | 56.3% | 0.6% | warns only |
+| `high` (default) | 54.0% | **0.0%** | blocks the build |
+| `medium` | 56.4% | 0.6% | warns only |
 
 The ambiguous class is worth 2.4pp of recall and carries a 0.6% false-positive
 rate. Reporting it as a warning keeps that recall available to a human
@@ -214,6 +214,21 @@ The general rule this expresses: when nothing structural separates an attack
 from ordinary text, the honest answer is a lower severity, not a cleverer
 regex. Every attempt here to find the cleverer regex has been defeated by a
 word the attacker chooses.
+
+A third class joined them in the latest round, on a different axis:
+
+- **Character-level findings from a reading Ward had to reconstruct.** When a
+  file's bytes do not decode cleanly under any encoding Ward tries, every
+  reading of it is a guess. Suppressing `obf.*` there was a three-byte bypass
+  — one NUL, one invalid UTF-8 byte and an odd length silenced the whole
+  family on a file whose payload was unchanged. Reporting them at full
+  severity puts a HIGH finding on every committed logo. So a reconstructed
+  reading keeps its findings at MEDIUM, and a file that reads as nothing at
+  all in any encoding is named in `scan.unverified_encoding` rather than
+  passed over in silence. That last part matters more than the severity: a
+  check Ward could not perform is a fact about the scan's coverage, and the
+  report says so — the same answer this codebase already gives for its 2 MB
+  per-file cap.
 
 #### Known false positives
 

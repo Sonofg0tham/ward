@@ -130,12 +130,22 @@ def test_a_binary_file_is_not_scanned_as_prose(tmp_path, name: str, content: byt
     Scanning everything indiscriminately is the opposite failure to skipping
     by extension: random bytes produce nonsense findings, and a file that
     does not read as text is not a text-injection vector either way.
+
+    "Not scanned as prose" means no RULE fires on decode noise and the build
+    is not blocked. It does not mean silence: a file whose bytes decoded as
+    nothing recognisable gets a scan.unverified_encoding finding at MEDIUM
+    naming it, because the hidden-character rules genuinely did not run on it
+    and a scan that cannot say so is a scan that reported clean over a gap.
     """
     repo = _repo(tmp_path, {"README.md": "All clean.\n"})
     (repo / name).write_bytes(content)
     _git("add", "-A", cwd=repo)
     _git("commit", "-qm", "binary", cwd=repo)
-    assert _scan(repo).returncode == 0, f"{name} was scanned as prose"
+    result = _scan(repo, "--format", "json")
+    assert result.returncode in (0, 1), f"{name} blocked the build"
+    report = json.loads(result.stdout)
+    noise = [f["rule_id"] for f in report["findings"] if f["category"] != "scan_integrity"]
+    assert not noise, f"{name} was scanned as prose and produced {noise}"
 
 
 def test_undecodable_padding_cannot_remove_a_file_from_the_scan() -> None:

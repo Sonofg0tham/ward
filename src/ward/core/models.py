@@ -83,6 +83,14 @@ class ScanInput:
     rule id matches any glob are dropped before aggregation. This is the
     documented escape hatch for files that legitimately discuss prompt
     injection (security research, Ward's own docs, etc).
+    ``demoted_rules`` carries rule-id globs whose findings are reported at
+    MEDIUM instead of their own severity. Suppression and demotion answer two
+    different questions: suppression is for a finding that is an ARTEFACT (a
+    U+202E manufactured by re-reading ASCII as UTF-16 is not in the document
+    at all), demotion is for a finding that is real but arrived through a
+    reading Ward had to reconstruct. Demoting rather than suppressing is what
+    stops a whole-file judgement about the bytes from being able to silence a
+    detector - see ``_Readings`` in cli.py.
     """
 
     surface: Surface
@@ -91,6 +99,7 @@ class ScanInput:
     decoded: tuple[str, ...] = field(default_factory=tuple)
     location: str = ""  # e.g. "README.md:12" or "commit abc1234"
     suppressed_rules: frozenset[str] = field(default_factory=frozenset)
+    demoted_rules: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True)

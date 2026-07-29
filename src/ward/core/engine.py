@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
 from fnmatch import fnmatchcase
 from typing import get_args
 
@@ -73,6 +74,7 @@ def build_input(
     location: str = "",
     trust_suppressions: bool = True,
     suppress_rules: tuple[str, ...] | None = None,
+    demote_rules: tuple[str, ...] | None = None,
 ) -> ScanInput:
     """Wrap a raw string into a ``ScanInput`` with normalised + decoded forms.
 
@@ -193,6 +195,7 @@ def build_input(
         decoded=tuple(decoded),
         location=location,
         suppressed_rules=suppressed,
+        demoted_rules=frozenset(demote_rules or ()),
     )
 
 
@@ -261,5 +264,13 @@ def scan_inputs(
                     finding.rule_id, source.suppressed_rules
                 ):
                     continue
+                # Demotion never drops a finding, only its severity, and only
+                # downwards - a rule already below MEDIUM keeps its own.
+                if (
+                    source.demoted_rules
+                    and _is_suppressed(finding.rule_id, source.demoted_rules)
+                    and finding.severity in (Severity.CRITICAL, Severity.HIGH)
+                ):
+                    finding = replace(finding, severity=Severity.MEDIUM)
                 findings.append(finding)
     return aggregate(findings, target=target, fail_on=fail_on, threshold=threshold)
