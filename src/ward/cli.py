@@ -23,7 +23,13 @@ from rich.table import Table
 from rich.text import Text
 
 from . import __version__
-from .core.engine import UnknownCategoryError, build_input, check_rule_categories, scan_inputs
+from .core.engine import (
+    UnknownCategoryError,
+    UnknownSurfaceError,
+    build_input,
+    check_rule_categories,
+    scan_inputs,
+)
 from .core.git_metadata import (
     CODE_SUFFIXES,
     DOC_SUFFIXES,
@@ -382,7 +388,9 @@ class _Readings:
     primary: int
     lossless: list[bool] = field(default_factory=list)
 
-    def obf_policy(self, idx: int, text: str) -> tuple[bool, bool]:
+    def obf_policy(
+        self, idx: int, text: str, *, claims_to_be_text: bool = False
+    ) -> tuple[bool, bool]:
         """How far to trust obf.* findings from reading ``idx``.
 
         Returns ``(suppress, demote)``. Three answers, because two were not
@@ -410,7 +418,14 @@ class _Readings:
         # ASCII and spacing exactly cancel its penalties for U+FFFD and NUL.
         # Every real binary measured sits below it and every document above.
         if _text_score(text) > 0:
-            return False, True
+            # Demote, unless the file claims to be text. A `.png` that does
+            # not decode is ordinary and must not fail a build; a `.md` that
+            # does not decode is anomalous, and appending one invalid byte to
+            # a documentation file was otherwise enough to take
+            # obf.unicode_tag from HIGH to MEDIUM - exit 2 to exit 1, which
+            # the Action passes. Same discriminator scan.unverified_encoding
+            # already uses on the suppressed branch.
+            return False, not claims_to_be_text
         return True, False
 
 
@@ -576,7 +591,7 @@ def _load_pack(rule_pack: Path | None) -> RulePack:
         # the interpreter exits 1 - WARN to the Action - which is the very
         # failure mode being guarded against.
         check_rule_categories(pack)
-    except (RulePackError, UnknownCategoryError) as exc:
+    except (RulePackError, UnknownCategoryError, UnknownSurfaceError) as exc:
         typer.echo(f"Rule pack error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
     return pack
@@ -899,7 +914,9 @@ def scan_local(
                 unreadable.append(relname)
                 continue
             for idx, content in enumerate(readings.texts):
-                obf_suppress, obf_demote = readings.obf_policy(idx, content)
+                obf_suppress, obf_demote = readings.obf_policy(
+                    idx, content, claims_to_be_text=suffix in DOC_SUFFIXES
+                )
                 if obf_suppress and idx == readings.primary:
                     unverified.add(relname)
                 inputs.append(
@@ -939,7 +956,9 @@ def scan_local(
             # Nothing is skipped on the strength of a ratio, so padding cannot
             # remove a file from the scan.
             for idx, content in enumerate(readings.texts):
-                obf_suppress, obf_demote = readings.obf_policy(idx, content)
+                obf_suppress, obf_demote = readings.obf_policy(
+                    idx, content, claims_to_be_text=suffix in DOC_SUFFIXES
+                )
                 if obf_suppress and idx == readings.primary:
                     unverified.add(relname)
                 readable = _readable_text(content)
@@ -975,7 +994,9 @@ def scan_local(
                 unreadable.append(relname)
                 continue
             for idx, content in enumerate(readings.texts):
-                obf_suppress, obf_demote = readings.obf_policy(idx, content)
+                obf_suppress, obf_demote = readings.obf_policy(
+                    idx, content, claims_to_be_text=suffix in DOC_SUFFIXES
+                )
                 if obf_suppress and idx == readings.primary:
                     unverified.add(relname)
                 # Top-of-file comments only - cheap, high signal.
@@ -1142,6 +1163,11 @@ def scan_pr(
     ]
     for sha, msg in meta.commit_messages:
         inputs.append(build_input("commit_message", msg, location=f"commit:{sha[:8]}"))
+    # scan-local has always scanned this and scan-pr never did, so 24 rules
+    # were dead in the path the GitHub Action actually runs - the only path
+    # that ever sees a fork PR, where the name is attacker-controlled.
+    for sha, author in meta.commit_authors:
+        inputs.append(build_input("commit_author", author, location=f"commit:{sha[:8]}:author"))
     for path in meta.changed_file_paths:
         inputs.append(build_input("file_name", path, location=path))
 

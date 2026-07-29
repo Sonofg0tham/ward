@@ -21,12 +21,12 @@ traditional security tools ignore.
 
 **Latest benchmark:**
 
-- **Smoke** (bundled 50-row samples, offline): 79.2% in-scope recall,
+- **Smoke** (bundled 50-row samples, offline): 67.2% in-scope recall,
   0.0% false-positive rate.
-- **Full corpus** (`ward bench --download`, 1,391 real rows): **58.3%
+- **Full corpus** (`ward bench --download`, 1,391 real rows): **55.8%
   in-scope recall, 0.0% false-positive rate** across Lakera, deepset,
   and Spikee. AdvBench is a deliberate ceiling test at 0%.
-  At `--fail-on medium` the same corpora give 60.7% recall for 0.6% FPR.
+  At `--fail-on medium` the same corpora give 58.6% recall for 0.6% FPR.
 - **Optional LLM judge tier** recovers semantic injections regex
   structurally misses - measure the lift with `ward bench --judge`.
 
@@ -206,7 +206,7 @@ wheel under each upstream's MIT or Apache 2.0 licence.
 ```bash
 ward bench
 # Wrote benchmark report: ward-bench-report.md
-# In-scope recall: 79.2%  FPR: 0.0%
+# In-scope recall: 67.2%  FPR: 0.0%
 ```
 
 Output is Markdown by default with `--format json` for CI ingestion.

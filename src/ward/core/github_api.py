@@ -39,6 +39,11 @@ class PRMetadata:
     base_ref: str
     head_sha: str
     commit_messages: tuple[tuple[str, str], ...]  # (sha, message)
+    # (sha, author name). Attacker-controlled on a fork PR and read into
+    # a reviewing agent's context verbatim, so it is a scanned surface -
+    # 24 rules declare commit_author and scan-pr could not build it
+    # because this field did not exist.
+    commit_authors: tuple[tuple[str, str], ...] = ()
     changed_file_paths: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -176,6 +181,25 @@ def fetch_pr_metadata(owner: str, repo: str, number: int) -> PRMetadata:
     _check_complete("commits", len(commits), pr.get("commits"), ref)
     _check_complete("changed files", len(files), pr.get("changed_files"), ref)
 
+    def _names(commit: dict[str, object]) -> list[str]:
+        meta = commit.get("commit")
+        if not isinstance(meta, dict):
+            return []
+        out: list[str] = []
+        for role in ("author", "committer"):
+            person = meta.get(role)
+            if isinstance(person, dict):
+                name = person.get("name")
+                if isinstance(name, str) and name.strip():
+                    out.append(name)
+        return out
+
+    commit_authors = tuple(
+        (str(c["sha"]), name)
+        for c in commits
+        if isinstance(c, dict) and "sha" in c
+        for name in dict.fromkeys(_names(c))
+    )
     commit_messages = tuple(
         (str(c["sha"]), str(c["commit"]["message"]))
         for c in commits
@@ -195,6 +219,7 @@ def fetch_pr_metadata(owner: str, repo: str, number: int) -> PRMetadata:
         base_ref=str(pr.get("base", {}).get("ref", "")),
         head_sha=str(pr.get("head", {}).get("sha", "")),
         commit_messages=commit_messages,
+        commit_authors=commit_authors,
         changed_file_paths=changed_paths,
     )
 

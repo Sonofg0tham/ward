@@ -235,9 +235,41 @@ class UnknownCategoryError(ValueError):
     """A rule declares a category no detector will ever run."""
 
 
+class UnknownSurfaceError(ValueError):
+    """A rule declares a surface no input will ever carry."""
+
+
 def check_rule_categories(rule_pack: RulePack) -> None:
-    """Public entry point for the orphan-rule check. Raises on a bad pack."""
+    """Public entry point for the orphan-rule checks. Raises on a bad pack."""
     _check_every_rule_runs(rule_pack, [cls(rule_pack) for cls in ALL_DETECTOR_CLASSES])
+    _check_every_surface_exists(rule_pack)
+
+
+def _check_every_surface_exists(rule_pack: RulePack) -> None:
+    """Refuse a pack whose rules name a surface nothing produces.
+
+    The same argument as the category check one function up, and it was only
+    ever applied to categories. `surfaces: [pr_bodyy]` - one letter - loaded
+    without complaint, matched nothing, and reported PASS on the payload the
+    rule was written to catch. build_input already rejects an unknown surface
+    from an SDK caller for this reason; a rule FILE could still name one.
+    """
+    unknown: dict[str, set[str]] = {}
+    for rule in rule_pack.rules:
+        for surface in rule.surfaces:
+            if surface not in VALID_SURFACES:
+                unknown.setdefault(rule.id, set()).add(surface)
+    if not unknown:
+        return
+    listed = ", ".join(
+        f"{rule_id} ({', '.join(sorted(surfaces))})"
+        for rule_id, surfaces in sorted(unknown.items())
+    )
+    raise UnknownSurfaceError(
+        f"{len(unknown)} rule(s) declare a surface no input ever carries, so they would "
+        f"never fire and the scan would report PASS regardless of the input: {listed}. "
+        f"Valid surfaces: {', '.join(sorted(VALID_SURFACES))}."
+    )
 
 
 def _check_every_rule_runs(rule_pack: RulePack, detectors: Sequence[Detector]) -> None:
