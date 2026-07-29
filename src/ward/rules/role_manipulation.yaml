@@ -59,8 +59,8 @@
     # writes, and "enabling god mode in the sandbox build" is a sentence a
     # game project writes. At HIGH both hard-failed the build. It needs the
     # sentence to be ASKING for the mode, not describing one.
-    - '(?i)\b(?:enter|enable|activate|switch\s+to|turn\s+on|you\s+are\s+in|now\s+in)\s+(?:\w+\s+){0,2}god\s+mode\b'
-    - '(?i)\b(?:enter|enable|activate|switch\s+to|go\s+into|you\s+are\s+(?:now\s+)?in)\s+(?:developer|admin)\s+mode\b'
+    - '(?i)\b(?:enter|enable|activate|switch\s+to|turn\s+on|you\s+are\s+in|now\s+in|unlock|start|engage|begin|initiate|trigger|invoke|assume|adopt)\s+(?:\w+\s+){0,2}god\s+mode\b'
+    - '(?i)\b(?:enter|enable|activate|switch\s+to|go\s+into|you\s+are\s+(?:now\s+)?in|unlock|start|engage|begin|initiate|trigger|invoke|assume|adopt)\s+(?:developer|admin)\s+mode\b'
     # The canonical DAN prompt puts the activation AFTER the phrase:
     # "act as ChatGPT with Developer Mode enabled". Requiring a leading
     # verb missed it entirely.
