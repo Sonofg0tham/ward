@@ -276,14 +276,20 @@ def _tokenizer_markers_are_whole_values(node: object) -> bool:
         marker = _TOKENIZER_MARKER.search(node)
         if marker is None:
             return True
-        # A Jinja chat template legitimately embeds the markers in a longer
-        # string - that IS the file's purpose - and every ChatML tokenizer
-        # config ships one. Template syntax is the discriminator: prose
-        # carrying a forged control token does not contain "{%" or "{{".
-        if "{%" in node or "{{" in node:
-            return True
         return marker.group(0) == node.strip()
     if isinstance(node, dict):
+        # NO TEMPLATE EXEMPTION. A ChatML chat_template legitimately embeds
+        # control tokens in a longer string, and two attempts to carve that
+        # out were both purchasable: first on template syntax appearing in
+        # the value ("{{" is two characters anyone types), then on the FIELD
+        # NAME - and the attacker writes the field names too, so a payload
+        # under a key called "chat_template" was exempt.
+        #
+        # Nothing inside the document can gate this, because the attacker
+        # writes the whole document. So a ChatML config collides, the same
+        # way the defensive prompt line does, and gets the same treatment:
+        # recorded in SECURITY.md with a one-line suppression rather than an
+        # exemption anyone can satisfy.
         return all(
             _tokenizer_markers_are_whole_values(k) and _tokenizer_markers_are_whole_values(v)
             for k, v in node.items()

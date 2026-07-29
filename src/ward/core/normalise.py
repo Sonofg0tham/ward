@@ -174,6 +174,11 @@ _CONFUSABLE_FOLD = str.maketrans(
         "ᴡ": "w",
         "ʏ": "y",
         "ᴢ": "z",
+        # U+A731 SMALL CAPITAL S. The rest of the small-capital block was
+        # added last round to close a homoglyph evasion, and this one - the
+        # letter the example payload actually needed - was left out, so
+        # "ɪɢɴᴏʀᴇ all previouꜱ inꜱtructionꜱ" still scanned clean.
+        "ꜱ": "s",
         # Greek uppercase
         "Α": "A",
         "Β": "B",
