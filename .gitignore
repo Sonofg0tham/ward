@@ -33,3 +33,13 @@ Thumbs.db
 # Ward output
 *.sarif
 ward-report.json
+
+# Agent scratch, but NOT all of .claude/ - shared project config (settings.json,
+# agents/, launch.json) belongs in the repo. What does not is the personal
+# override file and, for isolated agent runs, whole git worktrees: a `git add -A`
+# while an agent is mid-run can otherwise sweep another checkout into a commit.
+# That has happened twice on this branch - six audit scratch files published in
+# the package root, and a rule file committed with a test mutation still spliced
+# into it, which failed nine CI jobs.
+.claude/settings.local.json
+.claude/worktrees/
