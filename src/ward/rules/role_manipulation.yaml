@@ -26,7 +26,7 @@
   severity: high
   description: "'You are now ...' role assignment"
   patterns:
-    - '(?i)you\s+are\s+now\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|security|maintainer|owner|unrestricted|jailbroken|dan|do\s+anything\s+now)'
+    - '(?i)you\s+are\s+now\s+(?:a|an|the)\s+(?:[A-Za-z][A-Za-z''’-]{2,19}\s+)?(?:admin|administrator|developer|root|superuser|sysadmin|security|operator|approver|bot|agent|privileged\s+\w+|unrestricted|(?:maintainer|owner)(?=[^\n]{0,60}\b(?:full\s+(?:rights|access|permissions?|authority|control)|elevated|privileged|unrestricted|superuser|root\s+access|admin(?:istrator)?\s+(?:rights|access|privileges?)))|jailbroken|dan|do\s+anything\s+now)'
     # "act as" keeps only the unambiguous jailbreak personas. A service
     # account that "will act as the owner of the artifact bucket", or a doc
     # saying someone should "act as the maintainer for this release", is
@@ -149,6 +149,18 @@
   # "you are now an admin" stays HIGH on role.you_are_now - that one is
   # addressed to the agent and has been stable throughout.
   patterns:
+    # Being MADE a maintainer or an owner is ordinary onboarding prose -
+    # "you are now a maintainer of this package on npm" - and being TOLD you
+    # are one is a persona grant. Nothing in the sentence separates them, so
+    # it warns here, and role.you_are_now blocks only when a privilege claim
+    # comes with it.
+    - '(?i)\byou\s+are\s+now\s+(?:a|an|the)\s+(?:[A-Za-z][A-Za-z''’-]{2,19}\s+)?(?:maintainer|owner)\b'
+    # Being MADE a maintainer or an owner is ordinary onboarding prose -
+    # "you are now a maintainer of this package on npm" - and being TOLD you
+    # are one is a persona grant. Nothing in the sentence separates them, so
+    # it warns here and blocks on role.you_are_now only when a privilege
+    # claim comes with it.
+    - '(?i)\byou\s+are\s+now\s+(?:a|an|the)\s+(?:[A-Za-z][A-Za-z''’-]{2,19}\s+)?(?:maintainer|owner)\b'
     - '(?i)\bact\s+as\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|security|maintainer|owner)\b(?=[^\n]{0,100}\b(?:approve|approving|merge|merging|accept|lgtm|sign\s+off|ship|deploy|instead|comply|obey|do\s+(?:the\s+following|this|it|as)|reveal|print|output|leak|exfiltrate|send|post|upload|tell\s+me|give\s+me|say|write|answer|respond|repeat|execute|run)\b)'
     - '(?im)(?:^|(?<=[.!?] ))[ \t>*#\-0-9.)(\[\]/\"''’:]{0,64}act\s+as\s+(?:a|an|the)\s+(?:admin|administrator|developer|root|superuser|sysadmin|security|maintainer|owner)\b'
     # A bare `role: system` / `role: assistant`. Real signal - a forged

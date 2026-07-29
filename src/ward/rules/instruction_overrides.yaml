@@ -319,7 +319,7 @@
   severity: high
   description: "Explicit 'note to the reviewer agent / AI' aside"
   patterns:
-    - '(?i)(?:note|message|instruction|memo|aside)\s+(?:to|for)\s+(?:the\s+)?(?:reviewer\s+agent|ai|llm|assistant|claude|gpt|copilot|cursor|antigravity|windsurf)(?:\s+(?:code\s+)?(?:reviewer|agent|assistant|bot|model|system|tool|engine|service|helper))?\s*[:>]'
+    - '(?i)(?:note|message|instruction|memo|aside)\s+(?:to|for)\s+(?:the\s+)?(?:reviewer\s+agent|ai|llm|assistant|claude|gpt|copilot|cursor|antigravity|windsurf|(?:(?:code\s+)?review(?:er)?\s+)?(?:agent|bot|automation)(?=[^\n]{0,20}[:>][^\n]{0,120}?\b(?:approv\w*|merg\w*|lgtm|sign\s+off|ignore|disregard|bypass|skip|reveal|disclose|leak|exfiltrat\w*|do\s+not\s+(?:flag|report|mention|review)|without\s+(?:review|checking))))(?:\s+(?:code\s+)?(?:reviewer|agent|assistant|bot|model|system|tool|engine|service|helper))?\s*[:>]'
     # The colon is what makes this an ADDRESS to the agent. Accepting a bare
     # space instead matched "Our AI ignores files matched by .gitignore",
     # which is a sentence an AI-tooling repo writes about itself.
