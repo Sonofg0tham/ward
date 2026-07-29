@@ -123,7 +123,7 @@
   # exit 0. Severity is the answer: this warns, and exf.post_findings keeps
   # CRITICAL for the high-signal nouns and for anything tied to the agent.
   patterns:
-    - '(?is)(?:please\s+)?(?:send|post|forward|submit|exfiltrate|upload|share|transmit|copy)\s+(?:(?:a|an|the|one)\s+(?:copy|list|dump|export|snapshot|subset|value|contents?)\s+of\s+)?(?:the\s+|all\s+|any\s+|full\s+|complete\s+)*(?:results?|output|response|review(?:\s+summary)?|summary|report|analysis|notes?|findings?)\b[^\n]{0,80}?\s(?:to|via|using|at)\s+https?://'
+    - '(?is)(?:please\s+)?(?:send|post|forward|submit|exfiltrate|upload|share|transmit|copy)\s+(?:(?:a|an|the|one)\s+(?:copy|list|dump|export|snapshot|subset|value|contents?)\s+of\s+)?(?:[A-Za-z0-9''\u2019.-]+\s+){0,3}(?:results?|output|response|review(?:\s+summary)?|summary|report|analysis|notes?|findings?)\b[^\n]{0,80}?\s(?:to|via|using|at)\s+https?://'
   surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Check the destination. A reviewer agent posting its output to an arbitrary host is exfiltration; a runbook posting to your own status page is not."
 

@@ -115,13 +115,13 @@ Benchmark, current trunk vs the committed v0.2.3 reports:
 
 | | v0.2.3 | now |
 |---|---|---|
-| Smoke (50-row samples) | 75.2% recall, 0.0% FPR | 75.2% recall, 0.0% FPR |
-| Full corpus, blocking (`fail-on: high`) | 53.5% recall, 0.0% FPR | **54.1%** recall, 0.0% FPR |
-| Full corpus, reporting (`fail-on: medium`) | — | **56.4%** recall, 0.6% FPR |
+| Smoke (50-row samples) | 75.2% recall, 0.0% FPR | **77.6%** recall, 0.0% FPR |
+| Full corpus, blocking (`fail-on: high`) | 53.5% recall, 0.0% FPR | **57.3%** recall, 0.0% FPR |
+| Full corpus, reporting (`fail-on: medium`) | — | **59.6%** recall, 0.6% FPR |
 
-So the rule work is a net detection *gain* on the real corpora — 567 of the
+So the rule work is a net detection *gain* on the real corpora — 600 of the
 1,048 in-scope injection rows caught at the blocking threshold against 561 at
-v0.2.3, so **6 more rows** — while removing the classes of build-blocking
+v0.2.3, so **39 more rows** — while removing the classes of build-blocking
 false positive listed under **Fixed** below, with the FPR still 0.0% across
 all 343 benign rows.
 

@@ -81,9 +81,28 @@
   severity: high
   description: "DAN-style jailbreak vocabulary in a branch, tag or file name"
   patterns:
-    - '(?i)\b(?:jailbreak\s+mode|unrestricted\s+mode|dan\s+mode|do\s+anything\s+now)\b'
+    - '(?i)\b(?:dan\s+mode|do\s+anything\s+now)\b'
+    # `developer mode` on a ref name is browser-extension vocabulary until
+    # the ref also asks for something. docs/developer-mode.md does not;
+    # feat/enable-developer-mode-and-approve does.
+    - '(?i)\b(?:developer|admin|god)\s+mode\b(?=[\s\S]{0,80}\b(?:approv\w*|merg\w*|lgtm|ignore|bypass|unrestricted|jailbreak|exfiltrat\w*|leak))'
+    - '(?i)\b(?:approv\w*|merg\w*|lgtm|ignore|bypass)(?=[\s\S]{0,80}\b(?:developer|admin|god)\s+mode\b)'
   surfaces: [branch_name, commit_author, tag_name, file_name, directory_name]
   remediation: "Reject."
+
+# The rest of the DAN canon on ref names. `security/jailbreak-mode-detector`,
+# `lib/unrestricted-mode-guard.ts` and `tests/fixtures/jailbreak_mode.yaml`
+# are the ref names of the repositories most likely to be running Ward, and
+# a ref name is a label rather than an utterance - it can never carry the
+# second-person address that makes the vocabulary an injection. So it warns.
+- id: role.jailbreak_identifier_hint
+  category: role_manipulation
+  severity: medium
+  description: "Jailbreak vocabulary in a branch, tag or file name"
+  patterns:
+    - '(?i)\b(?:jailbreak\s+mode|unrestricted\s+mode)\b'
+  surfaces: [branch_name, commit_author, tag_name, file_name, directory_name]
+  remediation: "Read the name. A detector for the technique and a request for it look the same in a ref name."
 
 - id: role.fake_role_block
   category: role_manipulation
@@ -93,7 +112,7 @@
     # system|assistant get the same follow-line discriminator as user|tool:
     # an indented `system:` key in a compose or CI file is a mapping, not a
     # forged turn.
-    - '(?ims)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*(?=(?:[^\n]{0,200}\n){0,6}?[^\n]{0,200}?\b(?:you\s+(?:are|must|will|should|can|may)|your\s+(?:role|task|instructions?|purpose)|ignore|disregard|forget|approve|act\s+as|from\s+now|pretend|never\s+refuse|do\s+not\s+refuse|unrestricted|do\s+(?:it|this|as\s+(?:i|we)\s+say)|comply|obey|merge|reveal|print|output|include\s+(?:it|them|the)|attach|pre-?(?:authorised|authorized|approved)|already\s+(?:been\s+)?(?:audited|reviewed|approved|signed\s+off)|no\s+further\s+review|(?:is|are)\s+trusted|trusted\s+(?:developer|internal|source|input|content)|do\s+not\s+flag|must\s+not\s+be\s+flagged|(?:checks?|filters?|scanning)\s+(?:are|is)\s+(?:disabled|off)|safe\s+to\s+(?:merge|land|approve)|end\s+of\s+(?:user|untrusted)\s+(?:content|input)|lgtm\s+is\s+expected|without\s+further\s+(?:checks?|review)))'
+    - '(?ims)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*(?=[\s\S]{0,1200}?\b(?:you\s+(?:are|must|will|should|can|may)|your\s+(?:role|task|instructions?|purpose)|ignore|disregard|forget|approve|act\s+as|from\s+now|pretend|never\s+refuse|do\s+not\s+refuse|unrestricted|do\s+(?:it|this|as\s+(?:i|we)\s+say)|comply|obey|merge|reveal|print|output|include\s+(?:it|them|the)|attach|pre-?(?:authorised|authorized|approved)|already\s+(?:been\s+)?(?:audited|reviewed|approved|signed\s+off)|no\s+further\s+review|(?:is|are)\s+trusted|trusted\s+(?:developer|internal|source|input|content)|do\s+not\s+flag|must\s+not\s+be\s+flagged|(?:checks?|filters?|scanning)\s+(?:are|is)\s+(?:disabled|off)|safe\s+to\s+(?:merge|land|approve)|end\s+of\s+(?:user|untrusted)\s+(?:content|input)|lgtm\s+is\s+expected|without\s+further\s+(?:checks?|review)))'
     # user/tool discriminated by what FOLLOWS, not by their own indentation.
     # Column zero was the wrong test: a top-level `user:` key in an Ansible
     # playbook, a GitLab CI config, a Kubernetes manifest or a compose file
@@ -144,7 +163,7 @@
     # been pre-authorised by the security team" is. Only one of those can
     # be told apart by a regex, so this warns and role.fake_role_block
     # blocks the shapes that carry an order or a trust assertion.
-    - '(?im)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*(?=[^ \t\n][^\n]{0,200}?[A-Za-z]{2,}[ \t]+[a-z]{2,}[ \t]+[a-z]{2,})'
+    - '(?im)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*(?![ \t]*[A-Za-z0-9_.-]+[ \t]*:)(?=[^\n]{0,200}?[A-Za-z]{2,}[ \t]+[a-z]{2,}[ \t]+[a-z]{2,})'
   surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Read the surrounding sentence. If it tells the agent to adopt the role rather than describing a service account, treat the metadata as untrusted."
 

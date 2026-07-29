@@ -463,13 +463,38 @@ def test_developer_mode_is_browser_extension_vocabulary(pack, surface: str, name
     ("surface", "name"),
     [
         ("branch_name", "feat/dan-mode-enabled"),
-        ("branch_name", "feat/jailbreak-mode"),
         ("branch_name", "feat/do-anything-now"),
-        ("tag_name", "v1-unrestricted-mode"),
     ],
 )
 def test_the_dan_canon_keeps_the_ref_surfaces(pack, surface: str, name: str):
+    """role.you_are_now - the same attack class - already declares the
+    identifier surfaces, and the project's own pinned attack fixture is a
+    branch name. Branch names are Ward's flagship surface.
+
+    Round twenty-one split this. `jailbreak mode` and `unrestricted mode` name
+    the repositories most likely to be running Ward - security/jailbreak-mode-detector,
+    lib/unrestricted-mode-guard.ts - and a ref name is a label, not an
+    utterance, so it can never carry the second-person address that makes the
+    vocabulary an injection. Those warn now. `dan mode` and `do anything now`
+    have no such reading and still block.
+    """
     assert scan(pack, surface, name).exit_code == 2
+
+
+@pytest.mark.parametrize(
+    ("surface", "name"),
+    [
+        ("branch_name", "feat/jailbreak-mode"),
+        ("tag_name", "v1-unrestricted-mode"),
+        ("file_name", "security/jailbreak-mode-detector.py"),
+        ("directory_name", "lib/unrestricted-mode-guard"),
+    ],
+)
+def test_the_dan_canon_keeps_the_ref_surfaces_softly(pack, surface: str, name: str):
+    """The half that cannot be precise at HIGH: reported, not blocking."""
+    report = scan(pack, surface, name)
+    assert report.findings, "jailbreak vocabulary in a ref name went silent"
+    assert report.exit_code != 2, "a detector's own ref name blocked the build"
 
 
 @pytest.mark.parametrize(
