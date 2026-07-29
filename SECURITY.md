@@ -187,7 +187,7 @@ Measured on the full 1,391-row corpus:
 
 | Threshold | In-scope recall | FPR | Behaviour |
 |-----------|-----------------|-----|-----------|
-| `high` (default) | 54.0% | **0.0%** | blocks the build |
+| `high` (default) | 54.1% | **0.0%** | blocks the build |
 | `medium` | 56.4% | 0.6% | warns only |
 
 The ambiguous class is worth 2.4pp of recall and carries a 0.6% false-positive
