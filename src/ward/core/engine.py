@@ -118,20 +118,39 @@ def build_input(
     # replaces every full stop in the document with a space - fusing unrelated
     # sentences into instructions nobody wrote. One "&lt;" or "%20" anywhere
     # in a file was enough to trigger it.
-    blob_payloads: list[str] = []
-    for kind, form in decode_candidates_tagged(text):
+    def _add_decoded(form: str) -> str:
+        """Add a decoded form AND its normalised reading, returning the latter.
+
+        Normalisation was applied to the surface text and to nothing derived
+        from it, so a single invisible or fullwidth character inside the
+        plaintext BEFORE encoding produced a decoded string no rule matched -
+        base64 of "ig<U+200B>nore all previous instructions" scanned with zero
+        findings while the same sentence unencoded exited 2. The raw decode is
+        kept as well so evidence still shows what was actually there.
+        """
         _add(form)
-        if kind == "blob":
-            blob_payloads.append(form)
+        folded = normalise_text(form)
+        if folded != form:
+            _add(folded)
+        return folded
+
+    blob_payloads: list[str] = []
+    # Transforms of the WHOLE input (percent-encoding, HTML entities,
+    # quoted-printable) rather than of one embedded blob. They are kept apart
+    # because identifier-splitting must not touch them, not because the
+    # evasion transforms must not - see below.
+    whole_payloads: list[str] = []
+    for kind, form in decode_candidates_tagged(text):
+        folded = _add_decoded(form)
+        (blob_payloads if kind == "blob" else whole_payloads).append(folded)
     # Also decode the NORMALISED text. A single zero-width character dropped
     # inside a base64 or hex blob makes the raw text undecodable, so scanning
     # only the raw form meant one invisible character was enough to stop the
     # payload ever being decoded and rescanned.
     if normalised != text:
         for kind, form in decode_candidates_tagged(normalised):
-            _add(form)
-            if kind == "blob":
-                blob_payloads.append(form)
+            folded = _add_decoded(form)
+            (blob_payloads if kind == "blob" else whole_payloads).append(folded)
 
     # Text forms the evasion transforms should be applied to. Identifier
     # surfaces get both, because git forbids spaces in ref names: any
@@ -166,6 +185,15 @@ def build_input(
             _add(split_payload)
             evasion_bases.append(split_payload)
         evasion_bases.append(payload)
+
+    # Whole-document decodes get the evasion transforms too, but NOT the
+    # identifier split. The exclusion above is about splitting specifically -
+    # it replaces every full stop with a space and fuses unrelated sentences -
+    # and that argument does not apply to de-leeting or collapsing repeats,
+    # which are character-level and cannot fuse anything. Without this,
+    # percent-encoded and HTML-entity leetspeak scanned clean while the same
+    # leetspeak in plain text blocked.
+    evasion_bases.extend(whole_payloads)
 
     # Unicode TAG-block decode runs on the RAW text (normalise strips those
     # chars). Any TAG-smuggled instruction reappears as visible ASCII so the
