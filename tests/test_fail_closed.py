@@ -365,7 +365,17 @@ def test_utf16_byte_order_mark_is_not_itself_a_finding(git_repo: Path, tmp_path:
     doc.write_bytes(text.encode("utf-16"))
 
     decoded = read_all(doc)
-    assert decoded == text, f"UTF-16 not decoded faithfully: {decoded!r}"
+    # `in`, not `==`. A BOM is now a HINT that adds a candidate reading rather
+    # than an answer that removes the others - two attacker-written bytes were
+    # otherwise enough to make Ward read an ASCII document as UTF-16, turn the
+    # payload into CJK mojibake and report exit 0 with no findings at all. So a
+    # BOM'd file legitimately yields several readings and read_all joins them.
+    #
+    # This is NOT the weakening the docstring above warns about: mojibake does
+    # not contain the plaintext, so the faithful decode being present is the
+    # same claim the equality made. The BOM assertion is unchanged and still
+    # covers every reading, which is why the lstrip applies to all of them.
+    assert text in decoded, f"UTF-16 not decoded faithfully: {decoded!r}"
     assert "﻿" not in decoded, "BOM survived into the scanned text"
 
     (git_repo / "CLEAN.md").write_bytes(doc.read_bytes())

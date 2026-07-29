@@ -455,6 +455,18 @@ def _read_text_file(path: Path) -> _Readings | None:
         return _Readings(texts=[], primary=0)
     except OSError:
         return None
+    # A BOM is a HINT, never an answer. Returning a single reading here
+    # contradicted the rule stated eleven lines below - and the BOM is two
+    # bytes in a file the attacker wrote, so returning early handed them the
+    # winner. Prefixing an ASCII document with FF FE made Ward read it as
+    # UTF-16-LE: the payload became CJK mojibake, no text rule matched, and at
+    # an even length the decode was strict so the junk reading was even
+    # trusted. Verdict PASS, exit 0, while git, GitHub and any agent reading
+    # the bytes as UTF-8 all still rendered the instruction.
+    #
+    # So the BOM-implied encoding joins the candidate list and the ranking
+    # decides, exactly as it does for a BOM-less file.
+    bom_encoding: str | None = None
     for bom, encoding in (
         (b"\xff\xfe\x00\x00", "utf-32-le"),
         (b"\x00\x00\xfe\xff", "utf-32-be"),
@@ -463,17 +475,8 @@ def _read_text_file(path: Path) -> _Readings | None:
         (b"\xef\xbb\xbf", "utf-8-sig"),
     ):
         if raw.startswith(bom):
-            try:
-                # lstrip the BOM: decoding utf-16-le leaves it as a literal
-                # U+FEFF, which is in the zero-width set - so every legitimate
-                # UTF-16 document would report obf.zero_width on its own BOM.
-                return _Readings(
-                    texts=[raw.decode(encoding, errors="replace").lstrip("﻿")],
-                    primary=0,
-                    lossless=[_decodes_strictly(raw, encoding)],
-                )
-            except (UnicodeError, LookupError):  # pragma: no cover - defensive
-                break
+            bom_encoding = encoding
+            break
     # No BOM. Do NOT try to pick one encoding - scan every plausible reading.
     #
     # Three heuristics were tried here and all three were defeated, each in a
@@ -488,7 +491,7 @@ def _read_text_file(path: Path) -> _Readings | None:
     # encoding Ward declined to consider, because Ward considers all of them.
     # The cost is decoding a file up to three times; the wrong readings are
     # CJK noise that matches no English rule.
-    text8 = raw.decode("utf-8", errors="replace")
+    text8 = raw.decode("utf-8", errors="replace").lstrip("﻿")
     # Reinterpret unless the UTF-8 reading is CLEAN. Gating on NUL alone was
     # wrong: a UTF-16 document written in a script with no ASCII component -
     # Chinese, Thai - contains no NUL byte at all, so the alternate readings
@@ -496,13 +499,27 @@ def _read_text_file(path: Path) -> _Readings | None:
     # cause of the "non-Latin UTF-16 loses" bug, not the scoring, and several
     # attempts at re-tuning the score could never have fixed it. A broken
     # UTF-8 decode is the signal that matters, and it costs nothing to check.
-    if b"\x00" not in raw and text8.count("�") * 20 < max(1, len(text8)):
+    if bom_encoding is None and b"\x00" not in raw and text8.count("�") * 20 < max(1, len(text8)):
         return _Readings(texts=[text8], primary=0, lossless=[_decodes_strictly(raw, "utf-8")])
     candidates = [text8]
     encodings = ["utf-8"]
+    if bom_encoding is not None:
+        try:
+            # lstrip the BOM: decoding utf-16-le leaves it as a literal U+FEFF,
+            # which is in the zero-width set, so a legitimate UTF-16 document
+            # would otherwise report obf.zero_width on its own byte-order mark.
+            candidates.append(raw.decode(bom_encoding, errors="replace").lstrip("﻿"))
+            encodings.append(bom_encoding)
+        except (UnicodeError, LookupError):  # pragma: no cover - defensive
+            pass
     for encoding in ("utf-16-le", "utf-16-be"):
         try:
-            candidates.append(raw.decode(encoding, errors="replace"))
+            # lstrip here too, not only on the BOM-implied candidate: the same
+            # bytes decoded by the same encoding arrive twice when a BOM is
+            # present, and a leading U+FEFF is a byte-order mark in ANY reading.
+            # Left in, it puts a zero-width character at the head of a
+            # legitimate UTF-16 document and dedup no longer collapses the pair.
+            candidates.append(raw.decode(encoding, errors="replace").lstrip("﻿"))
         except (UnicodeError, LookupError):  # pragma: no cover - defensive
             continue
         encodings.append(encoding)
@@ -1020,7 +1037,14 @@ def scan_local(
             rule_id="scan.unverified_encoding",
             detector="scan-local",
             category="scan_integrity",
-            severity=Severity.MEDIUM,
+            # A binary whose bytes are not text is ordinary; a file that CLAIMS
+            # to be documentation and is not is how a payload gets past the
+            # character-level rules while every reader still renders it. The
+            # extension is the one part of that the attacker cannot change
+            # without their file no longer being read as prose.
+            severity=(
+                Severity.HIGH if Path(name).suffix.lower() in DOC_SUFFIXES else Severity.MEDIUM
+            ),
             message=(
                 "This file's bytes did not decode as text under any encoding, so the "
                 "hidden-character checks (invisible tags, bidi overrides, zero-width "
