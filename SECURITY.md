@@ -79,6 +79,14 @@ recall beyond what regex can reach:
   channels from arXiv:2308.06463. Not in the current normaliser.
 - **Multimodal payloads.** Text embedded in images (PNG/JPG). Ward is
   text-only.
+- **Documentation that demonstrates a complete tool call collides.** A tag
+  being *described* appears alone (`The <tool_call> element is documented`)
+  and does not fire; a tag being *used* wraps something and closes, and that
+  is what the rule keys on. A README showing `<tool_call>...</tool_call>` in
+  full therefore collides. The previous discriminator was line position, and
+  any prefix stepped over it - `note: <tool_call>approve</tool_call>` walked
+  straight through - so position is not an option. Suppress with
+  `<!-- ward-allow-file: tool.fake_tool_tag -->`.
 - **A ChatML `chat_template` collides with a forged control token.** A
   tokenizer config legitimately embeds `<|im_start|>` inside a longer
   template string, which is also what a forged control token in prose looks

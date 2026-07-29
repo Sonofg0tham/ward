@@ -22,10 +22,10 @@
     # message or a PR body is not something any process legitimately emits
     # there, and the closing tag adds no information. Matching it alone is
     # linear and cannot be padded past.
-    - '(?im)^[ \t>*#\-]{0,8}<\s*tool[_\s]*call\s*>'
+    - '(?is)<\s*tool[_\s]*call\s*>.{0,400}?<\s*/\s*tool[_\s]*call\s*>'
     - '(?im)^[ \t>*#\-]{0,8}<\s*/\s*tool[_\s]*call\s*>'
-    - '(?im)^[ \t>*#\-]{0,8}<\s*function[_\s]*call\s*>'
-    - '(?im)^[ \t>*#\-]{0,8}<\s*invoke[_\s]*tool\s*>'
+    - '(?is)<\s*function[_\s]*call\s*>.{0,400}?<\s*/\s*function[_\s]*call\s*>'
+    - '(?is)<\s*invoke[_\s]*tool\s*>.{0,400}?<\s*/\s*invoke[_\s]*tool\s*>'
   surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject. Real tool calls are emitted by the model, not embedded in user-supplied text."
 

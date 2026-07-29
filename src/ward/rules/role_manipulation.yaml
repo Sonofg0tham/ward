@@ -78,7 +78,7 @@
     # system|assistant get the same follow-line discriminator as user|tool:
     # an indented `system:` key in a compose or CI file is a mapping, not a
     # forged turn.
-    - '(?im)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*(?=\S)'
+    - '(?ims)^[ \t]*(?:###?[ \t]*)?(?:system|assistant)[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*(?=[^\n]{0,200}?\b(?:you\s+(?:are|must|will|should|can|may)|your\s+(?:role|task|instructions?|purpose)|ignore|disregard|forget|approve|act\s+as|from\s+now|pretend|never\s+refuse|do\s+not\s+refuse|unrestricted|do\s+(?:it|this|as\s+(?:i|we)\s+say)|comply|obey|merge|reveal|print|output))'
     # user/tool discriminated by what FOLLOWS, not by their own indentation.
     # Column zero was the wrong test: a top-level `user:` key in an Ansible
     # playbook, a GitLab CI config, a Kubernetes manifest or a compose file
