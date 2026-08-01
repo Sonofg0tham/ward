@@ -139,9 +139,21 @@ def _result(finding: Finding, *, target: str) -> dict[str, object]:
 
 def render_sarif(report: ScanReport) -> str:
     """Produce a valid SARIF 2.1.0 document as a JSON string."""
-    seen: dict[str, dict[str, object]] = {}
+    # The descriptor describes the rule across the WHOLE run, so it takes the
+    # highest severity that rule reached - not whichever finding happened to
+    # come first. Findings arrive in file order and one rule can carry two
+    # severities in a run (the demotion path produces exactly that), so
+    # `setdefault` meant the number GitHub Code Scanning displays depended on
+    # filenames. Code Scanning alerts off security-severity, so a HIGH shown
+    # as MEDIUM is an alert somebody does not get.
+    worst: dict[str, Finding] = {}
     for finding in report.findings:
-        seen.setdefault(finding.rule_id, _rule_descriptor(finding))
+        current = worst.get(finding.rule_id)
+        if current is None or finding.severity.rank > current.severity.rank:
+            worst[finding.rule_id] = finding
+    seen: dict[str, dict[str, object]] = {
+        rule_id: _rule_descriptor(f) for rule_id, f in worst.items()
+    }
 
     rules = list(seen.values())
     results = [_result(f, target=report.target) for f in report.findings]

@@ -25,6 +25,12 @@ import re
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
+# A comment starts at a `#` that begins the line or follows whitespace, as in
+# gitignore. Splitting on ANY `#` silently widened a pattern that contained
+# one: `docs/*.md#draft` became `docs/*.md`, suppressing every markdown file
+# in the directory instead of the one file that was named.
+_COMMENT_RE = re.compile(r"(?:^|(?<=\s))#")
+
 
 @lru_cache(maxsize=512)
 def _compile(pattern: str) -> re.Pattern[str]:
@@ -99,7 +105,11 @@ def load_patterns(repo: Path) -> tuple[str, ...]:
     for raw in wardignore.read_text(encoding="utf-8", errors="replace").splitlines():
         # Strip trailing comments while preserving '#' inside a pattern only
         # if escaped (which fnmatch doesn't model anyway, so we keep it simple).
-        line = raw.split("#", 1)[0].strip()
+        # A `#` only starts a comment when whitespace precedes it, as in
+        # gitignore. Splitting on any `#` silently WIDENED a pattern that
+        # contained one: `docs/*.md#draft` became `docs/*.md`, suppressing
+        # every markdown file in the directory instead of one.
+        line = _COMMENT_RE.split(raw, 1)[0].strip()
         if line:
             patterns.append(line)
     return tuple(patterns)

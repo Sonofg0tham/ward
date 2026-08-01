@@ -156,10 +156,19 @@ def _read_stdin_text() -> str:
 # this, which is the strongest available signal that a run is not text.
 _UNREADABLE_RUN = re.compile("[�\x00]+")
 
-# Below this many readable characters there is nothing a rule could match, so
-# a file yielding less is passed over. It is a FLOOR ON WHAT SURVIVES, not a
-# ratio the file has to clear - see the docstring.
-_MIN_READABLE_CHARS = 24
+# There is NO floor on how much readable content a file must yield.
+#
+# There used to be one, at 24 characters, justified by "below this many
+# readable characters there is nothing a rule could match". The rule pack
+# disproves that: `DAN mode` is 8 characters and blocks, `jailbreak mode` is
+# 14, `do anything now` is 15, `you are now an admin` is 20. All four scanned
+# clean with zero findings when they were the entire content of an
+# extensionless file - and AGENTS, INSTRUCTIONS and NOTES are exactly the
+# extensionless files a coding agent is pointed at.
+#
+# The shortest matching payload is 8 characters, so any floor above zero hides
+# something and the attacker picks the length. Same shape as the decode
+# budget, the readability ratio and the 400-character tag bound before it.
 
 # How much of a single file is scanned. Content costs roughly 5s per MB, so a
 # repository with one large data file took minutes: 13MB alone was 66s, and a
@@ -220,7 +229,7 @@ def _readable_text(text: str) -> str:
         for ch in readable
         if ch.isprintable() or ch in "\n\r\t" or unicodedata.category(ch) == "Cf"
     )
-    return readable if len(readable.strip()) >= _MIN_READABLE_CHARS else ""
+    return readable if readable.strip() else ""
 
 
 # Rules that match a JSON SCHEMA rather than prose. A recorded API response
