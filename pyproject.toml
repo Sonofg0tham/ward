@@ -127,6 +127,7 @@ ignore = ["E501", "UP042"]
 "tests/test_encoding_bypasses.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_derived_form_parity.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_incomplete_checks_are_not_passes.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_multilingual_coverage.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 python_version = "3.11"

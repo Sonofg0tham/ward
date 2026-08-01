@@ -30,7 +30,7 @@
   severity: high
   description: "[es] Spanish-language instruction override"
   patterns:
-    - '(?i)ignor(?:a|e|en|ar)\s+(?:todas\s+las\s+|las\s+)?instrucciones\s+(?:previas|anteriores)'
+    - '(?i)(?:\A|(?<=[.!?] )|(?<=[.!?]\n)|(?<=\n))[ \t>*#\-0-9.)(\[\]/\"''\u2019:]{0,64}(?:(?:per\s+favore|por\s+favor|ahora|adesso|ora|ora\s+basta)\s+)*ignor(?:a|e|en|ar)\s+(?:todas\s+las\s+|las\s+)?instrucciones\s+(?:previas|anteriores)'
     - '(?i)olvid(?:a|e|en|ar)\s+todo\s+lo\s+(?:anterior|previo)'
   surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
@@ -40,7 +40,7 @@
   severity: high
   description: "[fr] French-language instruction override"
   patterns:
-    - '(?i)ignor(?:e|ez|er)\s+(?:toutes\s+les\s+|les\s+)?instructions\s+(?:précédentes|antérieures)'
+    - '(?i)(?:\A|(?<=[.!?] )|(?<=[.!?]\n)|(?<=\n))[ \t>*#\-0-9.)(\[\]/\"''\u2019:]{0,64}(?:(?:s''il\s+vous\s+pla\u00eet|por\s+favor|bitte|jetzt|maintenant|agora)\s+)*ignor(?:e|ez|er)\s+(?:toutes\s+les\s+|les\s+)?instructions\s+(?:précédentes|antérieures)'
     - '(?i)oubli(?:e|ez|er)\s+tout\s+ce\s+qui\s+précède'
   surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
@@ -50,7 +50,7 @@
   severity: high
   description: "[de] German-language instruction override"
   patterns:
-    - '(?i)ignorier(?:e|en|t)\s+(?:alle\s+|die\s+)?(?:vorherigen?|vorangegangenen?|vorangehenden?)\s+(?:anweisungen|anleitung|anweisung|hinweise|hinweis)'
+    - '(?i)(?:\A|(?<=[.!?] )|(?<=[.!?]\n)|(?<=\n))[ \t>*#\-0-9.)(\[\]/\"''\u2019:]{0,64}(?:(?:s''il\s+vous\s+pla\u00eet|por\s+favor|bitte|jetzt|maintenant|agora)\s+)*ignorier(?:e|en|t)\s+(?:alle\s+|die\s+)?(?:vorherigen?|vorangegangenen?|vorangehenden?)\s+(?:anweisungen|anleitung|anweisung|hinweise|hinweis)'
     - '(?i)vergiss\s+alles\s+(?:vorherige|bisherige|davor)'
   surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
@@ -60,7 +60,7 @@
   severity: high
   description: "[pt] Portuguese-language instruction override"
   patterns:
-    - '(?i)ignor(?:e|a|em|ar)\s+(?:todas\s+as\s+|as\s+)?instru[çc][õo]es\s+(?:anteriores|pr[ée]vias)'
+    - '(?i)(?:\A|(?<=[.!?] )|(?<=[.!?]\n)|(?<=\n))[ \t>*#\-0-9.)(\[\]/\"''\u2019:]{0,64}(?:(?:s''il\s+vous\s+pla\u00eet|por\s+favor|bitte|jetzt|maintenant|agora)\s+)*ignor(?:e|a|em|ar)\s+(?:todas\s+as\s+|as\s+)?instru[çc][õo]es\s+(?:anteriores|pr[ée]vias)'
     - '(?i)esque[çc](?:a|am|er)\s+tudo\s+(?:o\s+que\s+)?(?:foi\s+dito|veio\s+antes|anterior)'
   surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
@@ -83,7 +83,7 @@
   severity: high
   description: "[ja] Japanese-language instruction override"
   patterns:
-    - '(?:前の|以前の|これまでの|先ほどの)(?:指示|命令|プロンプト|ルール)(?:を|は)?(?:無視|忘れて)'
+    - '(?:前の|以前の|これまでの|先ほどの)(?:指示|命令|プロンプト|ルール)(?:を|は)?[^\n]{0,12}?(?:無視|忘れて)'
     - 'すべて(?:を)?忘れて'
   surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
@@ -95,5 +95,92 @@
   patterns:
     - 'تجاهل\s+(?:جميع\s+|كل\s+|كافة\s+)?(?:التعليمات|الأوامر|الإرشادات)\s+(?:السابقة|أعلاه)'
     - 'انس(?:ى)?\s+كل\s+(?:شيء|ما)\s+سبق'
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: io.it_ignore_previous
+  category: instruction_override
+  severity: high
+  description: "[it] Italian-language instruction override"
+  patterns:
+    - '(?i)(?:\A|(?<=[.!?] )|(?<=[.!?]\n)|(?<=\n))[ \t>*#\-0-9.)(\[\]/\"''\u2019:]{0,64}(?:(?:per\s+favore|por\s+favor|ahora|adesso|ora|ora\s+basta)\s+)*ignor(?:a|i|ate|are)\s+(?:tutte\s+le\s+|le\s+)?istruzioni\s+(?:precedenti|anteriori)'
+    - '(?i)dimentica\s+tutto\s+(?:quello\s+che\s+precede|il\s+precedente)'
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: io.nl_ignore_previous
+  category: instruction_override
+  severity: high
+  description: "[nl] Dutch-language instruction override"
+  patterns:
+    - '(?i)negeer\s+(?:alle\s+|de\s+)?(?:voorgaande|vorige|eerdere)\s+(?:instructies|aanwijzingen|opdrachten)'
+    - '(?i)vergeet\s+alles\s+(?:hiervoor|wat\s+eerder)'
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: io.pl_ignore_previous
+  category: instruction_override
+  severity: high
+  description: "[pl] Polish-language instruction override"
+  patterns:
+    - '(?i)(?:z)?ignoruj\s+(?:wszystkie\s+)?(?:poprzednie|wcze\u015bniejsze)\s+(?:instrukcje|polecenia|wskaz\u00f3wki)'
+    - '(?i)zapomnij\s+o\s+(?:wszystkich\s+)?(?:poprzednich|wcze\u015bniejszych)'
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: io.uk_ignore_previous
+  category: instruction_override
+  severity: high
+  description: "[uk] Ukrainian-language instruction override"
+  patterns:
+    - '(?i)\u0456\u0433\u043d\u043e\u0440\u0443(?:\u0439|\u0439\u0442\u0435|\u0432\u0430\u0442\u0438)\s+(?:\u0443\u0441\u0456\s+|\u0432\u0441\u0456\s+)?\u043f\u043e\u043f\u0435\u0440\u0435\u0434\u043d\u0456\s+(?:\u0456\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0456\u0457|\u0432\u043a\u0430\u0437\u0456\u0432\u043a\u0438)'
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: io.ko_ignore_previous
+  category: instruction_override
+  severity: high
+  description: "[ko] Korean-language instruction override"
+  patterns:
+    - '\uc774\uc804\s*(?:\uc9c0\uc2dc|\uc9c0\uce68|\uba85\ub839)[\s\S]{0,12}?\ubb34\uc2dc'
+    - '\uc55e\uc11c\s*\ubc1b\uc740[\s\S]{0,12}?\ubb34\uc2dc'
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: io.hi_ignore_previous
+  category: instruction_override
+  severity: high
+  description: "[hi] Hindi-language instruction override"
+  patterns:
+    - '(?:\u092a\u093f\u091b\u0932\u0947|\u092a\u0942\u0930\u094d\u0935)[\s\S]{0,24}?\u0928\u093f\u0930\u094d\u0926\u0947\u0936[\s\S]{0,16}?(?:\u0905\u0928\u0926\u0947\u0916\u093e|\u0928\u091c\u093c\u0930\u0905\u0902\u0926\u093e\u091c\u093c)'
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: io.tr_ignore_previous
+  category: instruction_override
+  severity: high
+  description: "[tr] Turkish-language instruction override"
+  patterns:
+    - '(?i)\u00f6nceki\s+(?:t\u00fcm\s+)?talimatlar\u0131[\s\S]{0,16}?yok\s+say'
+    - '(?i)\u00f6nceki\s+(?:t\u00fcm\s+)?(?:talimatlar\u0131|y\u00f6nergeleri)\s+(?:g\u00f6rmezden\s+gel|unut)'
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: io.vi_ignore_previous
+  category: instruction_override
+  severity: high
+  description: "[vi] Vietnamese-language instruction override"
+  patterns:
+    - '(?i)b\u1ecf\s+qua\s+(?:t\u1ea5t\s+c\u1ea3\s+)?(?:h\u01b0\u1edbng\s+d\u1eabn|ch\u1ec9\s+d\u1eabn|l\u1ec7nh)[\s\S]{0,16}?tr\u01b0\u1edbc'
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+  remediation: "Reject."
+
+- id: io.id_ignore_previous
+  category: instruction_override
+  severity: high
+  description: "[id] Indonesian-language instruction override"
+  patterns:
+    - '(?i)abaikan\s+(?:semua\s+)?(?:instruksi|perintah|petunjuk)\s+sebelumnya'
+    - '(?i)lupakan\s+(?:semua\s+)?(?:instruksi|perintah)\s+sebelumnya'
   surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject."
