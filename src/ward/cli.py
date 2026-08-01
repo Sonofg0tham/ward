@@ -429,6 +429,22 @@ class _Readings:
         return True, False
 
 
+def _claims_to_be_text(suffix: str) -> bool:
+    """Does this file assert, by its name, that its bytes are text?
+
+    A `.png` whose bytes do not decode is ordinary. A `.md`, a `.py`, a
+    `.yaml` or an extensionless `AGENTS` whose bytes do not decode is
+    anomalous - and appending one invalid byte to any of them was otherwise
+    enough to demote obf.unicode_tag from HIGH to MEDIUM, which is exit 2 to
+    exit 1 and a passing job.
+
+    No suffix at all counts as claiming text. Binaries essentially always
+    carry an extension; the files that do not are AGENTS, INSTRUCTIONS,
+    Dockerfile, Makefile - which is exactly the set a coding agent reads.
+    """
+    return suffix in DOC_SUFFIXES or suffix in CODE_SUFFIXES or suffix == ""
+
+
 def _decodes_strictly(raw: bytes, encoding: str) -> bool:
     """Would these bytes decode under this encoding with no error handling?
 
@@ -915,7 +931,7 @@ def scan_local(
                 continue
             for idx, content in enumerate(readings.texts):
                 obf_suppress, obf_demote = readings.obf_policy(
-                    idx, content, claims_to_be_text=suffix in DOC_SUFFIXES
+                    idx, content, claims_to_be_text=_claims_to_be_text(suffix)
                 )
                 if obf_suppress and idx == readings.primary:
                     unverified.add(relname)
@@ -957,7 +973,7 @@ def scan_local(
             # remove a file from the scan.
             for idx, content in enumerate(readings.texts):
                 obf_suppress, obf_demote = readings.obf_policy(
-                    idx, content, claims_to_be_text=suffix in DOC_SUFFIXES
+                    idx, content, claims_to_be_text=_claims_to_be_text(suffix)
                 )
                 if obf_suppress and idx == readings.primary:
                     unverified.add(relname)
@@ -995,7 +1011,7 @@ def scan_local(
                 continue
             for idx, content in enumerate(readings.texts):
                 obf_suppress, obf_demote = readings.obf_policy(
-                    idx, content, claims_to_be_text=suffix in DOC_SUFFIXES
+                    idx, content, claims_to_be_text=_claims_to_be_text(suffix)
                 )
                 if obf_suppress and idx == readings.primary:
                     unverified.add(relname)
@@ -1064,7 +1080,7 @@ def scan_local(
             # extension is the one part of that the attacker cannot change
             # without their file no longer being read as prose.
             severity=(
-                Severity.HIGH if Path(name).suffix.lower() in DOC_SUFFIXES else Severity.MEDIUM
+                Severity.HIGH if _claims_to_be_text(Path(name).suffix.lower()) else Severity.MEDIUM
             ),
             message=(
                 "This file's bytes did not decode as text under any encoding, so the "
@@ -1892,7 +1908,8 @@ def _heuristic_rule_doc(rule_id: str, _detector_cls: type) -> str | None:
             "a clean result over a gap of unknown size."
         ),
         "scan.unverified_encoding": (
-            "scan.unverified_encoding\ncategory:    scan_integrity\nseverity:    medium\n"
+            "scan.unverified_encoding\ncategory:    scan_integrity\n"
+            "severity:    high on a file that claims to be text, medium otherwise\n"
             "surfaces:    file_content\n\n"
             "This file's bytes did not decode as text under any encoding Ward tries, so\n"
             "the character-level rules (obf.unicode_tag, obf.bidi_override,\n"

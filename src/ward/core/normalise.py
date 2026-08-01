@@ -697,7 +697,14 @@ def _decode_candidates_tagged(
     if _depth >= _MAX_DECODE_DEPTH:
         return []
     if _budget is None:
-        _budget = [_MAX_DECODE_BYTES]
+        # The budget exists to bound RECURSION, so it must not be spent merely
+        # by being handed a large input. It was a flat 64KB, and the
+        # whole-text transforms run first and cost ~len(text) each - so ONE
+        # percent-escape or HTML entity in a 66KB PR body drained it at depth
+        # zero and disabled all nested decoding. base64(base64(payload)) in a
+        # long body came back WARN instead of FAIL, and a single `%20` in a
+        # URL is enough to trigger it.
+        _budget = [max(_MAX_DECODE_BYTES, len(text) * 4)]
     if _budget[0] <= 0:
         return []
 

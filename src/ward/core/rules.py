@@ -128,7 +128,14 @@ def _as_rule_pack_error(source: str) -> Iterator[None]:
         yield
     except RulePackError:
         raise
-    except (ValueError, yaml.YAMLError, re.error, OSError) as exc:
+    except Exception as exc:
+        # Deliberately broad, and the docstring above is the reason: "a rule
+        # pack that will not load is a broken gate however it failed to load".
+        # The enumerated list missed TypeError and AttributeError, so a YAML
+        # file that parses into a list of STRINGS reached _build_rule, blew up
+        # on `.get`, and escaped as an unhandled traceback with exit 1 - which
+        # the Action reads as WARN. Naming the exception types was the same
+        # mistake as naming the words an attacker types.
         raise RulePackError(f"Could not load {source}: {exc}") from exc
 
 
