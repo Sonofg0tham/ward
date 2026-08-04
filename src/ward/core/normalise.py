@@ -290,6 +290,9 @@ def contains_unicode_tag(text: str) -> list[tuple[int, str]]:
     return hits
 
 
+_TAG_CHAR_RE = re.compile(r"[\U000e0000-\U000e007f]")
+
+
 def decode_unicode_tags(text: str) -> str:
     """Fold ASCII-mapped TAG-block characters back to their ASCII equivalents.
 
@@ -728,6 +731,26 @@ def _decode_candidates_tagged(
         # the payload was missed.
         if _looks_like_text(candidate):
             out.append((kind, candidate))
+        elif _TAG_CHAR_RE.search(candidate):
+            # A candidate made of Unicode TAG characters scores 0.00 on the
+            # printable ratio - every TAG codepoint is category Cf and
+            # str.isprintable() is False for the whole category - so the gate
+            # discarded the one payload class Ward rates CRITICAL when it is
+            # visible, and discarded it before anything downstream could
+            # decode it. percent, HTML-entity, base64 and hex wrappings of a
+            # TAG payload all scanned with zero findings.
+            #
+            # Loosening the ratio is not the lever: Cf carries no printable
+            # weight at any threshold. Decoding first is - what comes out is
+            # visible ASCII and passes the gate on its own merits.
+            #
+            # The search is the guard. Decoding every rejected candidate took
+            # 97KB of invisible-character soup from under a second to
+            # twenty-five, and the gate rejects a great deal that has no TAG
+            # character in it at all.
+            untagged = decode_unicode_tags(candidate)
+            if untagged != candidate and _looks_like_text(untagged):
+                out.append((kind, untagged))
         _budget[0] -= len(candidate)
         if _budget[0] <= 0:
             # Stop going deeper, but keep scanning siblings at this level.
