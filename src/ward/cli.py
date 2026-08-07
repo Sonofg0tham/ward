@@ -997,7 +997,19 @@ def scan_local(
                         "file_content",
                         readable,
                         location=relname,
-                        trust_suppressions=_trusts_suppressions(relname),
+                        # NEVER trusted on this branch, unlike the DOC_SUFFIXES
+                        # one above. `ward-allow-file` is confined to
+                        # file_content because that was meant to mean a
+                        # documentation file - somewhere a PR-introduced
+                        # directive is visible to a human reviewer. This branch
+                        # reads AGENTS, INSTRUCTIONS, Dockerfile, Makefile and
+                        # any unlisted suffix as file_content as well, which
+                        # made it a second and non-documentation producer of
+                        # the suppressible surface: a PR adding an AGENTS file
+                        # could silence every rule against itself with its own
+                        # first line, and AGENTS is precisely where a payload
+                        # aimed at a coding agent belongs.
+                        trust_suppressions=False,
                         # obf.* rules would fire on the seams left where the
                         # undecodable runs were removed, which is an artefact
                         # of this reconstruction rather than something in the

@@ -326,22 +326,32 @@ still applies.
 
 ## Reporting a Vulnerability
 
-If you find a security issue in Ward itself, please do not open a public
-GitHub issue.
+Ward is a single-maintainer side project, not a funded product. This section
+says what that actually means so you can decide how to spend your time.
 
-Report privately via [GitHub Security Advisories](https://github.com/Sonofg0tham/ward/security/advisories/new).
+**Preferred route.** Report privately via
+[GitHub Security Advisories](https://github.com/Sonofg0tham/ward/security/advisories/new).
+Please include a description, steps to reproduce, the affected version, and
+any suggested remediation.
 
-Please include:
-- A description of the issue.
-- Steps to reproduce.
-- Affected version.
-- Any suggested remediation.
+**What you can expect.** Best effort, no service-level guarantee. This file
+previously promised acknowledgement within 72 hours and a negotiated 90-day
+disclosure window; neither is a commitment one unpaid maintainer can honour
+reliably, and a security policy that overstates its own responsiveness is
+worse than one that is blunt. If you have not heard back in a fortnight,
+assume the report has not been seen.
 
-You will receive an acknowledgement within 72 hours. A coordinated disclosure
-window of up to 90 days will be agreed before public release.
+**If the private channel is unavailable to you** — the repository may be
+archived, or private reporting may be switched off — open a public issue
+rather than dropping the finding. For a defensive scanner with no runtime
+privileges and no network access in its core, a public report is a reasonable
+fallback: the realistic worst case is that Ward misses something it claimed to
+catch, which is a gap in a defence-in-depth layer rather than a live
+exploitable service. Read the "Known limitations" section above first — a
+large share of what looks like a bypass is already documented there
+deliberately.
 
-Ward will credit reporters in the release notes unless anonymity is
-requested.
+Reporters are credited in the release notes unless anonymity is requested.
 
 ## Supported Versions
 

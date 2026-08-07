@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Brand is LOCKED in brand.md - cut-iron sentinel. Every colour below is a
+     token from that file, not a choice made here. Fonts come from the same
+     two sources brand.md names, so the render matches the original asset
+     rather than drifting to a system fallback. -->
+<link rel="preconnect" href="https://api.fontshare.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=clash-display@600,700&f[]=general-sans@400,500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      hsl(20 8% 8%);
+    --fg:      hsl(30 12% 91%);
+    --accent:  hsl(20 78% 52%);
+    --border:  hsl(20 8% 20%);
+    --muted:   hsl(20 6% 62%);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "General Sans", sans-serif;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* the ward-cut edge: one ember stripe, the only saturated thing on the page */
+  .edge {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 7px;
+    background: var(--accent);
+  }
+
+  /* the monogram, ghosted and bleeding off the right edge */
+  /* Sits behind the stats, bleeding off the right edge. Low enough that it
+     reads as texture, not as a second logo competing with the wordmark. */
+  .watermark {
+    position: absolute; right: -128px; top: 96px;
+    width: 520px; height: 520px;
+    opacity: 0.042;
+  }
+
+  .page { position: absolute; inset: 0; padding: 56px 64px 58px 78px; display: flex; flex-direction: column; }
+
+  header { display: flex; align-items: baseline; gap: 26px; }
+  .wordmark {
+    position: relative;
+    font-family: "Clash Display", sans-serif;
+    font-weight: 700;
+    font-size: 43px;
+    letter-spacing: 0.10em;
+    line-height: 1;
+  }
+  /* the stencil cut through the W, same 45 degrees as ward-mark.svg */
+  .wordmark svg { position: absolute; left: -5px; top: -7px; width: 58px; height: 58px; }
+  .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 15px;
+    letter-spacing: 0.19em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-family: "Clash Display", sans-serif;
+    font-weight: 600;
+    font-size: 63px;
+    line-height: 1.17;
+    letter-spacing: -0.018em;
+    margin: auto 0;
+  }
+  h1 .em { color: var(--accent); }
+
+  .stats { margin-top: auto; display: flex; gap: 76px; align-items: flex-end; }
+  .stat .n {
+    font-family: "Clash Display", sans-serif;
+    font-weight: 600;
+    font-size: 41px;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+  .stat .l {
+    font-size: 15px;
+    color: var(--muted);
+    margin-top: 7px;
+    letter-spacing: 0.005em;
+  }
+
+  .install {
+    position: absolute; right: 64px; bottom: 56px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 17px;
+    color: var(--muted);
+    letter-spacing: 0.01em;
+  }
+</style>
+</head>
+<body>
+  <div class="edge"></div>
+
+  <svg class="watermark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M14 16 L22.5 50 L31 27 L39.5 50 L48 16" fill="none" stroke="hsl(30 12% 91%)"
+          stroke-width="6.5" stroke-linecap="butt" stroke-linejoin="miter"/>
+  </svg>
+
+  <div class="page">
+    <header>
+      <div class="wordmark">
+        WARD
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <line x1="14" y1="46" x2="42" y2="18" stroke="hsl(20 78% 52%)" stroke-width="3.4"/>
+        </svg>
+      </div>
+      <div class="kicker">Pre-agent metadata scanner</div>
+    </header>
+
+    <h1>Catches prompt injection<br>
+        <span class="em">before</span> your AI code reviewer<br>
+        reads it.</h1>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="n">0.0%</div>
+        <div class="l">false-positive rate</div>
+      </div>
+      <div class="stat">
+        <div class="n">67 rules</div>
+        <div class="l">18 languages, offline</div>
+      </div>
+      <div class="stat">
+        <div class="n">6/6</div>
+        <div class="l">lab attacks blocked</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="install">pip install ward-scanner</div>
+</body>
+</html>
