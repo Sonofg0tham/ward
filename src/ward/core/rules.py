@@ -23,6 +23,8 @@ of rule dicts:
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -31,6 +33,14 @@ from typing import cast
 import yaml
 
 from .models import Severity, Surface
+
+
+class RulePackError(ValueError):
+    """Raised when a rule pack cannot be loaded or would load empty.
+
+    Subclasses ``ValueError`` so existing callers that catch ``ValueError``
+    around rule parsing keep working.
+    """
 
 
 @dataclass(frozen=True)
@@ -104,19 +114,92 @@ def _build_rule(raw: dict[str, object], source: str) -> Rule:
     )
 
 
+@contextmanager
+def _as_rule_pack_error(source: str) -> Iterator[None]:
+    """Funnel every load failure into RulePackError.
+
+    Only ``RulePackError`` is special-cased by the CLI into exit 2. Malformed
+    YAML, an uncompilable regex, or an unreadable file used to escape as
+    ``yaml.YAMLError`` / ``re.error`` / ``OSError`` and exit 1 - which the
+    GitHub Action reads as WARN and passes the job. A rule pack that will not
+    load is a broken gate however it failed to load.
+    """
+    try:
+        yield
+    except RulePackError:
+        raise
+    except Exception as exc:
+        # Deliberately broad, and the docstring above is the reason: "a rule
+        # pack that will not load is a broken gate however it failed to load".
+        # The enumerated list missed TypeError and AttributeError, so a YAML
+        # file that parses into a list of STRINGS reached _build_rule, blew up
+        # on `.get`, and escaped as an unhandled traceback with exit 1 - which
+        # the Action reads as WARN. Naming the exception types was the same
+        # mistake as naming the words an attacker types.
+        raise RulePackError(f"Could not load {source}: {exc}") from exc
+
+
+def _check_no_duplicate_ids(rules: list[Rule], source: str) -> None:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for rule in rules:
+        if rule.id in seen and rule.id not in duplicates:
+            duplicates.append(rule.id)
+        seen.add(rule.id)
+    if duplicates:
+        raise RulePackError(
+            f"Duplicate rule id(s) in {source}: {', '.join(sorted(duplicates))}. "
+            "Rule ids must be unique - `ward explain <id>` and suppression "
+            "directives both resolve by id."
+        )
+
+
 def load_rule_pack(custom_dir: Path | None = None) -> RulePack:
-    """Load all rule YAML files from the bundled pack or a custom directory."""
+    """Load all rule YAML files from the bundled pack or a custom directory.
+
+    A rule pack that loads zero rules is always an error, never a silent
+    empty pack. Ward is a security gate: scanning with no rules would report
+    PASS on everything, so a mistyped ``--rule-pack`` path has to be loud.
+
+    Raises:
+        RulePackError: if ``custom_dir`` is missing, is not a directory,
+            holds no rule files, contains duplicate rule ids, or the pack
+            otherwise resolves to zero rules.
+    """
     rules: list[Rule] = []
     if custom_dir is not None:
-        for yaml_path in sorted(custom_dir.glob("*.yaml")):
-            for raw in _load_yaml_file(yaml_path):
-                rules.append(_build_rule(raw, str(yaml_path)))
+        if not custom_dir.exists():
+            raise RulePackError(f"Rule pack directory does not exist: {custom_dir}")
+        if not custom_dir.is_dir():
+            raise RulePackError(f"Rule pack path is not a directory: {custom_dir}")
+        # Accept .yml as well as .yaml - silently ignoring a directory of
+        # .yml rules was the same fail-open trap as a missing directory.
+        yaml_paths = sorted(
+            (p for p in custom_dir.iterdir() if p.suffix in (".yaml", ".yml")),
+            key=lambda p: p.name,
+        )
+        if not yaml_paths:
+            raise RulePackError(f"Rule pack directory contains no .yaml/.yml files: {custom_dir}")
+        source = str(custom_dir)
+        with _as_rule_pack_error(source):
+            for yaml_path in yaml_paths:
+                for raw in _load_yaml_file(yaml_path):
+                    rules.append(_build_rule(raw, str(yaml_path)))
     else:
-        package = resources.files("ward.rules")
-        for resource in sorted(package.iterdir(), key=lambda r: r.name):
-            if not resource.name.endswith(".yaml"):
-                continue
-            with resources.as_file(resource) as path:
-                for raw in _load_yaml_file(path):
-                    rules.append(_build_rule(raw, resource.name))
+        source = "the bundled rule pack"
+        with _as_rule_pack_error(source):
+            package = resources.files("ward.rules")
+            for resource in sorted(package.iterdir(), key=lambda r: r.name):
+                if not resource.name.endswith(".yaml"):
+                    continue
+                with resources.as_file(resource) as path:
+                    for raw in _load_yaml_file(path):
+                        rules.append(_build_rule(raw, resource.name))
+
+    if not rules:
+        raise RulePackError(
+            f"No rules loaded from {source}. Refusing to scan with an empty rule "
+            "pack - every input would report PASS."
+        )
+    _check_no_duplicate_ids(rules, source)
     return RulePack(rules=tuple(rules))

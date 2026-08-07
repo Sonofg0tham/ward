@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
+from dataclasses import replace
 from fnmatch import fnmatchcase
+from typing import get_args
 
 from ..detectors import ALL_DETECTOR_CLASSES
+from ..detectors.base import Detector
 from .models import Finding, ScanInput, ScanReport, Severity, Surface
 from .normalise import (
-    decode_candidates,
+    decode_candidates_tagged,
     decode_unicode_tags,
     evasion_forms,
     extract_suppressions,
@@ -43,6 +46,26 @@ _IDENTIFIER_SURFACES: frozenset[Surface] = frozenset(
 # suppression that does not flow through scan content at all.
 _SUPPRESSION_SURFACES: frozenset[Surface] = frozenset({"file_content"})
 
+# Every surface the model declares, as runtime data. ``Surface`` is a Literal,
+# which is enforced by a type checker and by nothing else - and the callers
+# that matter here are the untyped ones going through the documented SDK.
+VALID_SURFACES: frozenset[str] = frozenset(get_args(Surface))
+
+# NO CAP ON HOW MANY DECODED PAYLOADS GET THE EVASION TREATMENT.
+#
+# There was one, of 8, added for performance in the same change that started
+# applying evasion transforms to decoded text. It was a bypass: eight decoy
+# base64 blobs in front of the real one pushed it past the boundary and the
+# payload scanned completely clean. The attacker chooses how many blobs go in
+# a PR body, so any positional cap is a cap the attacker controls.
+#
+# It was not buying anything either. Measured across 0 to 1000 decoy blobs
+# (59KB), removing it cost 0.499s -> 0.594s, and total decoded volume is
+# already bounded upstream by decode_candidates' byte budget - so this was a
+# second bound on something already bounded, in the one form that could be
+# stepped over. If the work here ever does need limiting, limit it by total
+# volume, never by position in the document.
+
 
 def build_input(
     surface: Surface,
@@ -50,6 +73,8 @@ def build_input(
     *,
     location: str = "",
     trust_suppressions: bool = True,
+    suppress_rules: tuple[str, ...] | None = None,
+    demote_rules: tuple[str, ...] | None = None,
 ) -> ScanInput:
     """Wrap a raw string into a ``ScanInput`` with normalised + decoded forms.
 
@@ -58,29 +83,139 @@ def build_input(
     untrusted (e.g. a file changed by the current PR): the directive is then
     ignored so an attacker cannot suppress detection by editing a doc file.
     """
+    # A surface no rule declares matches nothing, so a typo silently disables
+    # every rule and the scan reports PASS for any input. `build_input` is the
+    # documented SDK entry point - the README's LangGraph and CrewAI snippets
+    # both call it - so a caller writing "pr_bodyy" got a clean bill of health
+    # on a payload rather than an error. Surface is a Literal, which mypy
+    # checks for typed callers and does nothing at all for the untyped ones
+    # this is aimed at.
+    if surface not in VALID_SURFACES:
+        raise ValueError(
+            f"Unknown surface {surface!r}. No rule declares it, so nothing would "
+            f"be scanned and the result would be PASS whatever the input. "
+            f"Valid surfaces: {', '.join(sorted(VALID_SURFACES))}."
+        )
     if text is None:
         text = ""
     normalised = normalise_text(text)
-    decoded = list(decode_candidates(text))
+    decoded: list[str] = []
+    # A set beside the list purely for the membership test. `form not in
+    # decoded` on a list is a linear scan, and _add is called once per derived
+    # form, so building the input was quadratic in the number of forms: a
+    # 156KB PR body of distinct base64 blobs took 7.4s inside build_input
+    # alone, against 0.045s for 100KB of ordinary prose. Order still matters
+    # for evidence reporting, so the list stays.
+    seen_forms: set[str] = set()
+
+    def _add(form: str) -> None:
+        if form and form != normalised and form not in seen_forms:
+            seen_forms.add(form)
+            decoded.append(form)
+
+    # Only BLOB decodes are eligible for identifier-splitting below. A
+    # "whole" candidate is a transform of the entire input, and splitting one
+    # replaces every full stop in the document with a space - fusing unrelated
+    # sentences into instructions nobody wrote. One "&lt;" or "%20" anywhere
+    # in a file was enough to trigger it.
+    def _add_decoded(form: str) -> str:
+        """Add a decoded form AND its normalised reading, returning the latter.
+
+        Normalisation was applied to the surface text and to nothing derived
+        from it, so a single invisible or fullwidth character inside the
+        plaintext BEFORE encoding produced a decoded string no rule matched -
+        base64 of "ig<U+200B>nore all previous instructions" scanned with zero
+        findings while the same sentence unencoded exited 2. The raw decode is
+        kept as well so evidence still shows what was actually there.
+        """
+        _add(form)
+        folded = normalise_text(form)
+        if folded != form:
+            _add(folded)
+        return folded
+
+    blob_payloads: list[str] = []
+    # Transforms of the WHOLE input (percent-encoding, HTML entities,
+    # quoted-printable) rather than of one embedded blob. They are kept apart
+    # because identifier-splitting must not touch them, not because the
+    # evasion transforms must not - see below.
+    whole_payloads: list[str] = []
+    for kind, form in decode_candidates_tagged(text):
+        folded = _add_decoded(form)
+        (blob_payloads if kind == "blob" else whole_payloads).append(folded)
+    # Also decode the NORMALISED text. A single zero-width character dropped
+    # inside a base64 or hex blob makes the raw text undecodable, so scanning
+    # only the raw form meant one invisible character was enough to stop the
+    # payload ever being decoded and rescanned.
+    if normalised != text:
+        for kind, form in decode_candidates_tagged(normalised):
+            folded = _add_decoded(form)
+            (blob_payloads if kind == "blob" else whole_payloads).append(folded)
+
+    # Text forms the evasion transforms should be applied to. Identifier
+    # surfaces get both, because git forbids spaces in ref names: any
+    # multi-word instruction in a branch, tag or file name MUST use
+    # delimiters, so delimiter-splitting and leetspeak/repeat-letter evasion
+    # are the natural combination on Ward's flagship surface. Running the
+    # evasion transforms over the normalised text alone left
+    # "1gn0r3-4ll-pr3v10us-1nstruct10ns" undetected: splitting leaves it leet,
+    # and de-leeting leaves it hyphenated, so neither product matched.
+    evasion_bases = [normalised]
     if surface in _IDENTIFIER_SURFACES:
         identifier_form = split_identifier(normalised)
         if identifier_form != normalised:
-            decoded.append(identifier_form)
+            _add(identifier_form)
+            evasion_bases.append(identifier_form)
+
+    # A DECODED PAYLOAD IS STILL ATTACKER-CONTROLLED TEXT, so it gets the same
+    # treatment as the surface text rather than being matched only as-is.
+    # Decoding used to be the end of the line: base64 of plain English was
+    # caught, but base64 of the SAME sentence in leetspeak, or with a Cyrillic
+    # homoglyph, or hyphenated instead of spaced, all scanned clean. Each was
+    # a one-step bypass built by composing two techniques Ward already
+    # detected individually.
+    #
+    # Hyphenation is the important one. git forbids spaces in ref names, so
+    # any multi-word payload in a branch name MUST be delimited - which meant
+    # base64 of a branch-shaped payload was the natural encoding to reach for
+    # and the one guaranteed to get through.
+    for payload in blob_payloads:
+        split_payload = split_identifier(payload)
+        if split_payload != payload:
+            _add(split_payload)
+            evasion_bases.append(split_payload)
+        evasion_bases.append(payload)
+
+    # Whole-document decodes get the evasion transforms too, but NOT the
+    # identifier split. The exclusion above is about splitting specifically -
+    # it replaces every full stop with a space and fuses unrelated sentences -
+    # and that argument does not apply to de-leeting or collapsing repeats,
+    # which are character-level and cannot fuse anything. Without this,
+    # percent-encoded and HTML-entity leetspeak scanned clean while the same
+    # leetspeak in plain text blocked.
+    evasion_bases.extend(whole_payloads)
+
     # Unicode TAG-block decode runs on the RAW text (normalise strips those
     # chars). Any TAG-smuggled instruction reappears as visible ASCII so the
     # standard rules match against it.
     tag_decoded = decode_unicode_tags(text)
-    if tag_decoded != text and tag_decoded != normalised:
-        decoded.append(tag_decoded)
+    if tag_decoded != text:
+        _add(tag_decoded)
+
     # Evasion-resistant forms: leetspeak, character-spacing, repeat-letter.
-    # Run rules against the normalised text in each form so we catch
-    # "1gn0r3 pr3v10us", "i g n o r e", and "ignooooore".
-    for form in evasion_forms(normalised):
-        if form not in decoded and form != normalised:
-            decoded.append(form)
+    # Run rules against each base form so we catch "1gn0r3 pr3v10us",
+    # "i g n o r e", and "ignooooore".
+    for base in evasion_bases:
+        for form in evasion_forms(base):
+            _add(form)
     suppressed: frozenset[str] = frozenset()
     if trust_suppressions and surface in _SUPPRESSION_SURFACES:
         suppressed = extract_suppressions(text)
+    if suppress_rules:
+        # Caller-supplied, not attacker-supplied: used for alternate decodings
+        # of a file, where a character-level finding would be an artefact of
+        # the re-decode rather than something present in the document.
+        suppressed = suppressed | frozenset(suppress_rules)
     return ScanInput(
         surface=surface,
         raw=text,
@@ -88,11 +223,79 @@ def build_input(
         decoded=tuple(decoded),
         location=location,
         suppressed_rules=suppressed,
+        demoted_rules=frozenset(demote_rules or ()),
     )
 
 
 def _is_suppressed(rule_id: str, globs: frozenset[str]) -> bool:
     return any(fnmatchcase(rule_id, glob) for glob in globs)
+
+
+class UnknownCategoryError(ValueError):
+    """A rule declares a category no detector will ever run."""
+
+
+class UnknownSurfaceError(ValueError):
+    """A rule declares a surface no input will ever carry."""
+
+
+def check_rule_categories(rule_pack: RulePack) -> None:
+    """Public entry point for the orphan-rule checks. Raises on a bad pack."""
+    _check_every_rule_runs(rule_pack, [cls(rule_pack) for cls in ALL_DETECTOR_CLASSES])
+    _check_every_surface_exists(rule_pack)
+
+
+def _check_every_surface_exists(rule_pack: RulePack) -> None:
+    """Refuse a pack whose rules name a surface nothing produces.
+
+    The same argument as the category check one function up, and it was only
+    ever applied to categories. `surfaces: [pr_bodyy]` - one letter - loaded
+    without complaint, matched nothing, and reported PASS on the payload the
+    rule was written to catch. build_input already rejects an unknown surface
+    from an SDK caller for this reason; a rule FILE could still name one.
+    """
+    unknown: dict[str, set[str]] = {}
+    for rule in rule_pack.rules:
+        for surface in rule.surfaces:
+            if surface not in VALID_SURFACES:
+                unknown.setdefault(rule.id, set()).add(surface)
+    if not unknown:
+        return
+    listed = ", ".join(
+        f"{rule_id} ({', '.join(sorted(surfaces))})"
+        for rule_id, surfaces in sorted(unknown.items())
+    )
+    raise UnknownSurfaceError(
+        f"{len(unknown)} rule(s) declare a surface no input ever carries, so they would "
+        f"never fire and the scan would report PASS regardless of the input: {listed}. "
+        f"Valid surfaces: {', '.join(sorted(VALID_SURFACES))}."
+    )
+
+
+def _check_every_rule_runs(rule_pack: RulePack, detectors: Sequence[Detector]) -> None:
+    """Refuse a pack containing rules that nothing will execute.
+
+    Detectors select their rules with ``by_category``, which returns an empty
+    tuple for a category no detector claims. So a custom rule whose category
+    is misspelled - ``instruction-override`` for ``instruction_override``, one
+    hyphen - loaded without complaint, matched nothing, and Ward reported PASS.
+
+    The author had written a CRITICAL rule, watched it install cleanly, and
+    got a green tick on the exact payload it was written to catch. That is the
+    worst way for a security tool to fail, so it is an error rather than a
+    warning: a rule that cannot run is indistinguishable from no rule at all,
+    and the whole point of a custom pack is that someone is relying on it.
+    """
+    known = {d.category for d in detectors}
+    orphans = sorted({r.id: r.category for r in rule_pack.rules if r.category not in known}.items())
+    if not orphans:
+        return
+    listed = ", ".join(f"{rule_id} (category {category!r})" for rule_id, category in orphans)
+    raise UnknownCategoryError(
+        f"{len(orphans)} rule(s) declare a category no detector runs, so they would "
+        f"never fire and the scan would report PASS regardless of the input: {listed}. "
+        f"Known categories: {', '.join(sorted(known))}."
+    )
 
 
 def scan_inputs(
@@ -102,9 +305,18 @@ def scan_inputs(
     target: str,
     fail_on: Severity = Severity.HIGH,
     threshold: Severity = Severity.LOW,
+    extra_findings: tuple[Finding, ...] = (),
 ) -> ScanReport:
+    """Scan ``inputs`` and aggregate a verdict.
+
+    ``extra_findings`` are findings the CALLER produced - currently only
+    "this tracked file could not be read". They go through aggregation like
+    any other, so the verdict in the report and the process exit code cannot
+    disagree about the same run.
+    """
     detectors = [cls(rule_pack) for cls in ALL_DETECTOR_CLASSES]
-    findings: list[Finding] = []
+    _check_every_rule_runs(rule_pack, detectors)
+    findings: list[Finding] = list(extra_findings)
     for source in inputs:
         for detector in detectors:
             for finding in detector.scan(source):
@@ -112,5 +324,13 @@ def scan_inputs(
                     finding.rule_id, source.suppressed_rules
                 ):
                     continue
+                # Demotion never drops a finding, only its severity, and only
+                # downwards - a rule already below MEDIUM keeps its own.
+                if (
+                    source.demoted_rules
+                    and _is_suppressed(finding.rule_id, source.demoted_rules)
+                    and finding.severity in (Severity.CRITICAL, Severity.HIGH)
+                ):
+                    finding = replace(finding, severity=Severity.MEDIUM)
                 findings.append(finding)
     return aggregate(findings, target=target, fail_on=fail_on, threshold=threshold)

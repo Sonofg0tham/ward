@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from typer.testing import CliRunner
 
 from ward.bench import CORPORA, render_json, render_markdown, run_benchmark
@@ -234,8 +235,14 @@ def test_cli_bench_judge_unknown_engine_errors():
 # --- cache vs bundled-sample source tracking ---------------------------------
 
 
-def _fake_cache(monkeypatch, tmp_path, corpus_name: str, n_rows: int = 3):
-    """Point the download cache at a tiny fake full-corpus file."""
+def _fake_cache(monkeypatch, tmp_path, corpus_name: str, n_rows: int = 60):
+    """Point the download cache at a fake full-corpus file.
+
+    60 rows, not 3: a cache smaller than the 50-row bundled sample is now
+    rejected as implausible, so a tiny fake would silently exercise that guard
+    instead of the source labelling these tests are about. The guard itself is
+    covered by ``test_implausibly_small_cached_corpus_is_rejected``.
+    """
     import ward.bench.download as dl
 
     fake = tmp_path / f"{corpus_name}.jsonl"
@@ -252,8 +259,8 @@ def test_load_rows_no_cache_ignores_downloaded_corpus(monkeypatch, tmp_path):
     """use_cache=False must score the bundled sample even when a full
     download is cached - otherwise 'smoke' reports silently become full runs."""
     corpus = next(c for c in CORPORA if c.name == "lakera_ignore_instructions")
-    _fake_cache(monkeypatch, tmp_path, corpus.name, n_rows=3)
-    assert len(load_rows(corpus, use_cache=True)) == 3
+    _fake_cache(monkeypatch, tmp_path, corpus.name, n_rows=60)
+    assert len(load_rows(corpus, use_cache=True)) == 60
     assert len(load_rows(corpus, use_cache=False)) == 50
 
 
@@ -296,3 +303,166 @@ def test_cli_bench_no_cache_flag(monkeypatch, tmp_path):
     payload = json.loads(result.stdout)
     assert payload["corpora"][0]["source"] == "sample"
     assert payload["corpora"][0]["total"] == 50
+
+
+def test_implausibly_small_cached_corpus_is_rejected(tmp_path, monkeypatch):
+    """A cached corpus smaller than the bundled sample cannot be the full set.
+
+    The atomic download stops a partial write, but not a complete-but-wrong
+    file. A one-row cache was scored as "the full upstream corpora" and turned
+    a 55.5% figure into 52.4% - indistinguishable from a real regression.
+    """
+    from ward.bench import corpora as corpora_mod
+
+    corpus = next(c for c in corpora_mod.CORPORA if c.name == "spikee_jailbreaks")
+    stub = tmp_path / "spikee_jailbreaks.jsonl"
+    stub.write_text('{"text": "only row"}\n', encoding="utf-8")
+    monkeypatch.setattr(corpora_mod, "_iter_jsonl_path", corpora_mod._iter_jsonl_path)
+    monkeypatch.setattr("ward.bench.download.cached_path", lambda name: stub)
+    monkeypatch.setattr("ward.bench.download.is_cached", lambda name: True)
+
+    with pytest.warns(RuntimeWarning, match="cannot be the full upstream set"):
+        rows = corpora_mod.load_rows(corpus)
+    # Fell back to the 50-row bundled sample rather than scoring the stub.
+    assert len(rows) == 50, f"scored the stub instead of falling back: {len(rows)} rows"
+
+
+def test_source_label_matches_the_rows_actually_scored(monkeypatch, tmp_path):
+    """The label and the data must come from the same decision.
+
+    The runner used to recompute "full"/"sample" from is_cached() alone, so a
+    stub cache rejected by the plausibility guard still produced a report
+    announcing "the full upstream corpora" over 50 bundled-sample rows. This
+    had no coverage: the mutation survived the whole suite.
+    """
+    corpus = next(c for c in CORPORA if c.name == "lakera_ignore_instructions")
+
+    # Plausible cache -> "full", and the row count matches the cache.
+    _fake_cache(monkeypatch, tmp_path, corpus.name, n_rows=60)
+    report = run_benchmark([corpus], use_cache=True)
+    assert report.results[0].source == "full"
+    assert report.results[0].total == 60
+
+    # Implausible cache -> guard rejects it, so the label must say "sample"
+    # and the row count must match the bundled sample, not the stub.
+    stub_dir = tmp_path / "stub"
+    stub_dir.mkdir()
+    with pytest.warns(RuntimeWarning):
+        _fake_cache(monkeypatch, stub_dir, corpus.name, n_rows=2)
+        report = run_benchmark([corpus], use_cache=True)
+    assert report.results[0].source == "sample", "guard-rejected cache still labelled full"
+    assert report.results[0].total == 50
+
+
+# --- the summary line must not contradict the table above it -----------------
+
+
+def test_a_sub_threshold_regression_is_not_reported_as_no_change():
+    """The exact case that made this a bug worth fixing.
+
+    Recall down 4.9pp and FPR up 4.9pp both sat just under the 5pp warning
+    threshold, so neither produced a verdict - and the summary then printed
+    "No change to headline detection numbers" directly beneath a table
+    showing both movements. A reader who trusts the summary over the table,
+    which is the whole reason a summary exists, merged a real regression.
+    """
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.780, 0.0, {}), _sample_report(0.731, 0.049, {}))
+    assert "No change" not in body, "a 4.9pp movement was reported as no change"
+    assert "-4.9pp" in body
+    assert "+4.9pp" in body
+
+
+def test_no_change_is_only_claimed_when_nothing_changed():
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.780, 0.01, {}), _sample_report(0.780, 0.01, {}))
+    assert "No change to headline detection numbers" in body
+
+
+def test_small_regressions_are_reported_as_readily_as_small_improvements():
+    """The two directions used to be wildly asymmetric.
+
+    A 0.1pp improvement was announced; a 4.9pp regression was silent. For a
+    tool whose entire purpose is catching silent detection regressions, the
+    asymmetry pointed the wrong way.
+    """
+    from ward.bench.compare import render_diff
+
+    up = render_diff(_sample_report(0.700, 0.0, {}), _sample_report(0.705, 0.0, {}))
+    down = render_diff(_sample_report(0.705, 0.0, {}), _sample_report(0.700, 0.0, {}))
+    assert "No change" not in up
+    assert "No change" not in down, (
+        "a regression the same size as a reported improvement was reported as no change"
+    )
+
+
+def test_a_large_regression_still_says_investigate_before_merging():
+    """The quiet note must not have replaced the loud warning."""
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.80, 0.0, {}), _sample_report(0.60, 0.0, {}))
+    assert "Recall regression" in body
+    assert "Investigate before merging" in body
+
+
+def test_a_large_false_positive_rise_still_says_investigate_before_merging():
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.80, 0.0, {}), _sample_report(0.80, 0.20, {}))
+    assert "False-positive regression" in body
+    assert "Investigate before merging" in body
+
+
+def test_a_small_false_positive_rise_on_its_own_is_reported():
+    """FPR needs its own case, not one riding on a recall change.
+
+    The sub-threshold test moves both metrics, so the recall note alone kept
+    "No change" away and the FPR branch was never exercised. Mutation testing
+    caught it: disabling the small-FPR branch broke nothing.
+    """
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.80, 0.00, {}), _sample_report(0.80, 0.04, {}))
+    assert "No change" not in body, "a 4pp rise in false positives was reported as no change"
+    assert "+4.0pp" in body
+
+
+def test_a_small_false_positive_drop_on_its_own_is_reported():
+    from ward.bench.compare import render_diff
+
+    body = render_diff(_sample_report(0.80, 0.04, {}), _sample_report(0.80, 0.00, {}))
+    assert "No change" not in body
+
+
+def test_the_summary_never_contradicts_the_table():
+    """ "No change" and a non-zero delta must not appear in the same report.
+
+    The verdict threshold was chosen independently of the table's rounding -
+    0.1pp against 0.05pp - which left a band where the table printed "-0.1pp"
+    and the line directly underneath it said "No change to headline detection
+    numbers". One real corpus row regressing lands exactly in that band.
+
+    Rather than test the two thresholds separately, this asserts the property
+    that matters across the whole band: if the table shows a movement, the
+    summary must acknowledge it.
+    """
+    import re
+
+    from ward.bench.compare import render_diff
+
+    base = 889 / 1662
+    for delta_rows in range(-4, 5):
+        new = (889 + delta_rows) / 1662
+        body = render_diff(_sample_report(base, 0.0, {}), _sample_report(new, 0.0, {}))
+        row = next(line for line in body.splitlines() if "In-scope recall" in line)
+        printed = row.split("|")[4].strip()
+        moved = not re.fullmatch(r"±0\.0pp", printed)
+        says_no_change = "No change to headline detection numbers" in body
+        assert not (moved and says_no_change), (
+            f"table shows {printed} while the summary claims no change ({delta_rows:+d} rows)"
+        )
+        assert not (not moved and not says_no_change), (
+            f"table shows {printed} but the summary does not say no change ({delta_rows:+d} rows)"
+        )

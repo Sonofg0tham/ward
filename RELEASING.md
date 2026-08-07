@@ -33,8 +33,17 @@ These steps need your PyPI login and can't be scripted from here.
 
 Once the trusted publisher exists and `PYPI_READY=true`:
 
-1. Bump the version in **both** `pyproject.toml` and `src/ward/__init__.py`.
-2. Regenerate the benchmark reports and commit them (keeps the detection
+1. Bump the version everywhere it appears. `tests/test_version_consistency.py`
+   fails until all five agree, so `pytest` is the checklist:
+   - `pyproject.toml` → `[project].version`
+   - `src/ward/__init__.py` → `__version__`
+   - `action.yml` → the `ward-scanner>=X.Y.Z,<MAJOR.MINOR+1` pip pin
+   - `.pre-commit-hooks.yaml` → the `rev:` in the usage comment
+   - `README.md` → `uses: sonofg0tham/ward@vX.Y.Z` and the pre-commit `rev:`
+2. Move the `## [Unreleased]` entries in `CHANGELOG.md` under a new
+   `## [X.Y.Z] - YYYY-MM-DD` heading and add the compare link at the
+   bottom. The same test asserts a section exists for the current version.
+3. Regenerate the benchmark reports and commit them (keeps the detection
    envelope auditable per release):
    ```bash
    ward bench --no-cache --output benchmark/vX.Y.Z-smoke.md
@@ -47,14 +56,14 @@ Once the trusted publisher exists and `PYPI_READY=true`:
    ```
    `--no-cache` matters: without it, a machine that has ever run
    `--download` silently scores the full corpora and labels them smoke.
-3. Commit, push, then tag and push the tag:
+4. Commit, push, then tag and push the tag:
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-4. The release workflow builds the wheel and, with the gate on, publishes to
+5. The release workflow builds the wheel and, with the gate on, publishes to
    PyPI via the trusted publisher. It also creates a GitHub Release.
-5. Verify:
+6. Verify:
    ```bash
    pipx install ward-scanner==X.Y.Z
    pipx install "ward-scanner[judge]"     # with the optional LLM judge tier

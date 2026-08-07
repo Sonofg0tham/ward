@@ -10,7 +10,7 @@ from ..core.engine import build_input, scan_inputs
 from ..core.models import Severity, Surface, Verdict
 from ..core.rules import RulePack, load_rule_pack
 from ..judge import Judge
-from .corpora import CORPORA, Corpus, CorpusFit, load_rows
+from .corpora import CORPORA, Corpus, CorpusFit, load_rows, resolve_source
 
 
 @dataclass(frozen=True)
@@ -76,36 +76,48 @@ class BenchReport:
     ward_version: str = ""
 
     @property
-    def overall_recall(self) -> float:
+    def overall_recall(self) -> float | None:
+        """Recall over in-scope positives, or None if none were scored.
+
+        None rather than 0.0: "we scored no rows" and "we caught none of the
+        rows we scored" are different claims, and collapsing them publishes a
+        headline number that was never measured.
+        """
         in_scope = [r for r in self.results if r.corpus.fit is CorpusFit.IN_SCOPE]
         pos = sum(r.expected_positive for r in in_scope)
         det = sum(r.detected_positive for r in in_scope)
-        return (det / pos) if pos else 0.0
+        return (det / pos) if pos else None
 
     @property
-    def overall_false_positive_rate(self) -> float:
+    def overall_false_positive_rate(self) -> float | None:
+        """FPR over in-scope negatives, or None if no benign rows were scored.
+
+        Ward's headline claim is a 0.0% false-positive rate. Reporting 0.0%
+        when the selection contained no benign rows at all would make that
+        claim unearned, so the undefined case is explicit.
+        """
         in_scope = [r for r in self.results if r.corpus.fit is CorpusFit.IN_SCOPE]
         neg = sum(r.expected_negative for r in in_scope)
         fp = sum(r.detected_negative for r in in_scope)
-        return (fp / neg) if neg else 0.0
+        return (fp / neg) if neg else None
 
     @property
     def judge_ran(self) -> bool:
         return any(r.judge_ran for r in self.results)
 
     @property
-    def overall_combined_recall(self) -> float:
+    def overall_combined_recall(self) -> float | None:
         in_scope = [r for r in self.results if r.corpus.fit is CorpusFit.IN_SCOPE]
         pos = sum(r.expected_positive for r in in_scope)
         det = sum(r.detected_positive + r.judge_recovered_positive for r in in_scope)
-        return (det / pos) if pos else 0.0
+        return (det / pos) if pos else None
 
     @property
-    def overall_combined_false_positive_rate(self) -> float:
+    def overall_combined_false_positive_rate(self) -> float | None:
         in_scope = [r for r in self.results if r.corpus.fit is CorpusFit.IN_SCOPE]
         neg = sum(r.expected_negative for r in in_scope)
         fp = sum(r.detected_negative + r.judge_false_positive for r in in_scope)
-        return (fp / neg) if neg else 0.0
+        return (fp / neg) if neg else None
 
 
 def _surface_for(corpus: Corpus) -> Surface:
@@ -144,13 +156,12 @@ def run_benchmark(
     produce a true smoke report.
     """
     from .. import __version__
-    from .download import is_cached
 
     pack = rule_pack or load_rule_pack()
     results: list[CorpusResult] = []
     for corpus in corpora:
         rows = load_rows(corpus, use_cache=use_cache)
-        source = "full" if (use_cache and is_cached(corpus.name)) else "sample"
+        source = resolve_source(corpus, use_cache=use_cache)
         surface = _surface_for(corpus)
         expected_positive = sum(1 for _, ep in rows if ep)
         expected_negative = sum(1 for _, ep in rows if not ep)

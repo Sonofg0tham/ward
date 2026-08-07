@@ -68,4 +68,8 @@ def test_explain_unknown_rule():
 def test_update_rules_is_a_no_op_with_friendly_message():
     result = runner.invoke(app, ["update-rules"])
     assert result.exit_code == 0
-    assert "0.1" in result.stdout
+    # Reports the running version, not a hardcoded one, and points at the two
+    # ways to actually change rules today.
+    assert __version__ in result.stdout
+    assert "--rule-pack" in result.stdout
+    assert "upgrade" in result.stdout

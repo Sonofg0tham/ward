@@ -29,6 +29,34 @@ from .prompt import SYSTEM_PROMPT, VERDICT_SCHEMA, build_user_content, parse_ver
 
 DEFAULT_MODEL = "claude-haiku-4-5"
 
+# The first anthropic release whose Messages.create accepts output_config.
+# Verified by inspecting the create() signature in each published wheel;
+# 0.76 does not have it. Quoted in the upgrade hint, not used as the check.
+MIN_SDK_HINT = "0.77"
+
+
+def _supports_structured_outputs() -> bool:
+    """Does the installed SDK accept ``output_config`` on ``messages.create``?
+
+    A capability probe rather than a version comparison. ``Messages.create``
+    is generated with keyword-only parameters and no ``**kwargs``, so passing
+    ``output_config`` to an older SDK raises TypeError before any request is
+    made. Inspecting the signature answers the question directly and stays
+    correct if the parameter is ever backported or renamed upstream.
+    """
+    try:
+        import inspect
+
+        from anthropic.resources.messages import Messages
+
+        signature = inspect.signature(Messages.create)
+    except Exception:  # ImportError, or a restructured SDK we cannot introspect
+        # Unknown rather than absent. Say yes and let the real call fail with
+        # the SDK's own error, which beats refusing to run against a working
+        # SDK we simply could not introspect.
+        return True
+    return "output_config" in signature.parameters
+
 
 class AnthropicJudge(Judge):
     """Judge backed by the Claude API.
@@ -44,14 +72,40 @@ class AnthropicJudge(Judge):
         self._client = client
 
     def available(self) -> bool:
+        return self.unavailable_reason() is None
+
+    def unavailable_reason(self) -> str | None:
+        """Why the judge cannot run, or None if it can.
+
+        Checking that ``import anthropic`` succeeds is not enough. The SDK's
+        ``Messages.create`` is generated with keyword-only parameters and no
+        ``**kwargs``, so an older release does not merely ignore
+        ``output_config`` - it raises TypeError, which surfaced as an
+        unreadable "unexpected keyword argument" for anyone whose environment
+        already had a 0.4x-0.7x installed. ``available()`` reported ready
+        because it only looked for the import and a key.
+
+        Testing the capability rather than the version number keeps this
+        correct if the SDK ever renames or backports the parameter.
+        """
         try:
-            import anthropic  # noqa: F401
+            import anthropic
         except ImportError:
-            return False
-        # Pragmatic readiness gate: an explicit key/token in the environment.
-        # (Profile-based auth via `ant auth login` is not detected here - set
-        # ANTHROPIC_API_KEY to enable the judge in that case.)
-        return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
+            return (
+                "the anthropic SDK is not installed. Install Ward's judge "
+                "extra: pip install 'ward-scanner[judge]'"
+            )
+        if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+            # Profile-based auth via `ant auth login` is not detected here.
+            return "no ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in the environment"
+        if not _supports_structured_outputs():
+            version = getattr(anthropic, "__version__", "unknown")
+            return (
+                f"the installed anthropic SDK ({version}) is too old for structured "
+                "outputs, which Ward's judge requires. Upgrade it: "
+                f"pip install -U 'anthropic>={MIN_SDK_HINT}'"
+            )
+        return None
 
     def _get_client(self) -> Any:
         if self._client is not None:

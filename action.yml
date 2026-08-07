@@ -51,7 +51,7 @@ runs:
   using: "composite"
   steps:
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
       with:
         python-version: "3.12"
 
@@ -78,8 +78,12 @@ runs:
       run: ${{ github.action_path }}/action/entrypoint.sh
 
     - name: Upload SARIF to Code Scanning
-      if: ${{ inputs.upload-sarif == 'true' && inputs.format == 'sarif' && steps.run.outputs.report != '' }}
-      uses: github/codeql-action/upload-sarif@v4
+      # always() matters. When Ward finds something at or above fail-on, the
+      # Run step exits non-zero, and without a status function this upload is
+      # skipped - so Code Scanning got populated only on clean runs, and the
+      # maintainer saw a red tick with no rule ids and no evidence anywhere.
+      if: ${{ always() && inputs.upload-sarif == 'true' && inputs.format == 'sarif' && steps.run.outputs.report != '' }}
+      uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
       with:
         sarif_file: ${{ steps.run.outputs.report }}
         category: ward

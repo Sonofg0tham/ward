@@ -1,0 +1,82 @@
+name: Missed detection or false positive
+description: Ward let an injection through, or flagged something benign.
+labels: [detection]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        These are the most useful reports Ward gets. Both kinds become test
+        fixtures, so the more precisely you can give the input, the faster it
+        gets fixed.
+
+
+        Before filing a miss, please check the known limitations in
+        [SECURITY.md](https://github.com/Sonofg0tham/ward/blob/main/SECURITY.md).
+        Several classes are documented as out of reach for the regex tier
+        (GCG suffixes, semantic paraphrases, payload splitting) and the
+        optional LLM judge tier is the intended answer for those.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Which is it?
+      options:
+        - Missed detection (an injection that should have been caught)
+        - False positive (benign text that got flagged)
+    validations:
+      required: true
+
+  - type: textarea
+    id: input
+    attributes:
+      label: The exact input
+      description: >-
+        Paste it verbatim, not a screenshot. If it contains invisible
+        characters (zero-width, RTL override, Unicode TAG block), say so -
+        they will not survive a copy-paste into the issue body, so please
+        also give the codepoints.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface
+      description: Where the text appeared. This determines which rules apply.
+      options:
+        - branch_name
+        - commit_message
+        - pr_title
+        - pr_body
+        - file_name
+        - file_content
+        - code_comment
+        - other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: >-
+        For a miss: which rule you would expect to fire, if you know.
+        For a false positive: which rule fired and why the text is legitimate.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Ward version
+      placeholder: "0.2.3"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: custom-rules
+    attributes:
+      label: Rule pack
+      options:
+        - label: I am using the bundled rule pack (not `--rule-pack`).

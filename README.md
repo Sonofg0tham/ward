@@ -19,20 +19,25 @@ ingests before any LLM-based reviewer, SAST agent, or IaC scanner sees
 it. The job: catch prompt injection attempts embedded in the places that
 traditional security tools ignore.
 
-**Latest benchmark (v0.2.3):**
+**Latest benchmark:**
 
-- **Smoke** (bundled 50-row samples, offline): 75.2% in-scope recall,
+- **Smoke** (bundled 50-row samples, offline): 67.2% in-scope recall,
   0.0% false-positive rate.
-- **Full corpus** (`ward bench --download`, 1,391 real rows): **53.5%
+- **Full corpus** (`ward bench --download`, 1,391 real rows): **55.8%
   in-scope recall, 0.0% false-positive rate** across Lakera, deepset,
   and Spikee. AdvBench is a deliberate ceiling test at 0%.
+  At `--fail-on medium` the same corpora give 58.6% recall for 0.6% FPR.
 - **Optional LLM judge tier** recovers semantic injections regex
   structurally misses - measure the lift with `ward bench --judge`.
 
 The 0.0% FPR on 343 benign deepset rows is the strongest signal here.
-Full reports in [`benchmark/v0.2.3-smoke.md`](benchmark/v0.2.3-smoke.md)
-and [`benchmark/v0.2.3-full.md`](benchmark/v0.2.3-full.md). Every PR gets
-its own bench-diff comment via the CI workflow.
+The numbers above are current trunk; the per-release reports under
+[`benchmark/`](benchmark/) are committed at tag time, most recently
+[`benchmark/v0.2.3-smoke.md`](benchmark/v0.2.3-smoke.md) and
+[`benchmark/v0.2.3-full.md`](benchmark/v0.2.3-full.md). Every PR gets its
+own bench-diff comment via the CI workflow (fork PRs get it in the
+bench-diff job log and artifact instead, since a fork's token cannot
+comment).
 
 ## Why this exists
 
@@ -154,6 +159,20 @@ want through it.
 ward scan-branch  feat/ignore-previous-instructions
 ward scan-commit  HEAD
 ward explain      io.ignore_previous
+ward version
+```
+
+Ward can also check itself. `selftest` runs the built-in adversarial
+scenarios and prints the detection coverage, which is the quickest way to
+confirm an install, a custom rule pack, or a CI image is behaving:
+
+```bash
+ward selftest
+# 12/12 scenarios detected.
+
+ward attack-demo          # the same scenarios, narrated, for a demo or a talk
+ward update-rules         # pull the latest community rule pack
+ward bench-diff old.json new.json   # delta between two `ward bench --format json` runs
 ```
 
 ### Output formats
@@ -187,7 +206,7 @@ wheel under each upstream's MIT or Apache 2.0 licence.
 ```bash
 ward bench
 # Wrote benchmark report: ward-bench-report.md
-# In-scope recall: 75.2%  FPR: 0.0%
+# In-scope recall: 67.2%  FPR: 0.0%
 ```
 
 Output is Markdown by default with `--format json` for CI ingestion.
@@ -258,7 +277,7 @@ Markdown report you can paste into a blog post or PR comment:
 ```bash
 ward lab attack
 # Wrote lab report: ward-lab-report.md
-# Blocked by Ward: 5/5 scenarios.
+# Blocked by Ward: 6/6 scenarios.
 ```
 
 `ward lab attack` uses a deterministic mock and shows whether the
@@ -312,13 +331,22 @@ useful as a CI gate).
 
 ## GitHub Action
 
-Add it to a workflow in three lines:
+Add it to a workflow:
 
 ```yaml
-- uses: sonofg0tham/ward@v0.2.3
-  with:
-    fail-on: high
+permissions:
+  contents: read
+  security-events: write   # for the SARIF upload, which is on by default
+
+steps:
+  - uses: sonofg0tham/ward@v0.2.3
+    with:
+      fail-on: high
 ```
+
+`upload-sarif` defaults to `true`, and GitHub's default token is
+read-only, so the permission block is not optional. Set
+`upload-sarif: false` if you would rather not grant it.
 
 A fuller example that uploads SARIF to the GitHub Security tab:
 
@@ -417,8 +445,15 @@ Drop a directory of YAML files alongside your repo and point Ward at it:
 ward scan-local --rule-pack ./security/ward-rules
 ```
 
-Each YAML file is a list of rules. Schema is documented in
+Each `.yaml` or `.yml` file is a list of rules. Schema is documented in
 [`src/ward/rules/instruction_overrides.yaml`](src/ward/rules/instruction_overrides.yaml).
+
+Rule packs **fail closed**. If the directory is missing, holds no rule
+files, or resolves to zero rules, Ward exits 2 with an error rather than
+scanning with nothing loaded. A typo in a `--rule-pack` path is a broken
+gate, not a clean run, so it is never allowed to report PASS. Duplicate
+rule ids are rejected for the same reason: `ward explain` and suppression
+directives both resolve by id.
 
 ## Ignoring whole paths with `.wardignore`
 
@@ -428,15 +463,26 @@ content. Drop a `.wardignore` at the repo root with fnmatch-style globs:
 
 ```
 # .wardignore
-tests/fixtures/**/*    # adversarial by design
-security/research/*    # writeup of past attacks
-docs/threat-models/*
+tests/fixtures/**/*    # whole subtree
+security/research/*    # one level only
+docs/threat-models/    # trailing slash: whole subtree
 ```
+
+Globs are **segment-aware**, like `.gitignore`: `*` matches within a single
+path segment and `**` crosses separators. `docs/*` therefore covers
+`docs/api.md` but not `docs/internal/secret.md` — use `docs/**/*` or a
+trailing slash for the subtree. This matters because `.wardignore` is
+committed, so an attacker can read it: a pattern that silently suppressed
+more than it said would be a place to hide a payload.
 
 Filenames in ignored paths are STILL scanned (a malicious filename
 remains suspicious even inside an ignored directory). Only the content
 scan is suppressed. Ward's own repo uses this to exclude its own source
 tree from self-scanning.
+
+`.wardignore` is provenance-gated the same way `ward-allow-file` is: under
+`--suppression-base`, a `.wardignore` the current branch modified is
+ignored entirely, so a PR cannot add one and switch the scanner off.
 
 ## Suppressing rules in documentation
 
@@ -523,8 +569,19 @@ vulnerability disclosure process.
 ## Telemetry
 
 Ward sends none. No phone home, no anonymous stats, no metrics
-collection. The only outbound network calls Ward ever makes are the
-GitHub API requests you explicitly trigger via `ward scan-pr`.
+collection. Nothing about your code or your findings leaves the machine.
+
+Ward makes outbound requests on exactly three paths, each only when you
+explicitly invoke it:
+
+| Command | Host |
+|---------|------|
+| `ward scan-pr` | `api.github.com` |
+| `ward bench --download` | `huggingface.co`, `raw.githubusercontent.com` |
+| `ward judge` / `--judge anthropic` (optional `[judge]` extra) | your configured LLM provider |
+
+A default scan (`scan-local`, `scan-stdin`, `scan-branch`, `scan-commit`)
+makes no network calls at all.
 
 ## Development
 
@@ -536,7 +593,12 @@ pip install -e ".[dev]"
 pytest
 ```
 
-Coverage target is 75% and current trunk runs at 83%.
+Coverage target is 75% and current trunk runs at 86%.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the four CI gates, the conventions
+that trip people up (the deliberate homoglyph lint ignores, in particular),
+and the fixture-pair rule every new detection rule has to follow. Release
+history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 

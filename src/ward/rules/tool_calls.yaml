@@ -9,10 +9,29 @@
   severity: critical
   description: "Pseudo XML tool-call wrapper in untrusted text"
   patterns:
-    - '(?is)<\s*tool[_\s]*call\s*>.*?</\s*tool[_\s]*call\s*>'
-    - '(?is)<\s*function[_\s]*call\s*>.*?</\s*function[_\s]*call\s*>'
-    - '(?is)<\s*invoke[_\s]*tool\s*>.*?</\s*invoke[_\s]*tool\s*>'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
+    # The body span is BOUNDED. An unbounded `.*?` under (?s) is quadratic
+    # against unclosed tags: for each of n opening tags the engine scans to
+    # the end of the document looking for a close that never comes. Measured
+    # on the raw pattern: 22KB took 0.12s, 88KB took 1.9s, 220KB took 12s,
+    # and a 440KB file of repeated "<tool_call>" took 51s of CPU - a scanner
+    # that hangs is a scanner someone removes from CI.
+    #
+    # Bounding the body alone is not enough either: padding past the bound
+    # would then evade the rule, trading a hang for a bypass. The OPENING tag
+    # is the whole signal - a literal <tool_call> in a branch name, a commit
+    # message or a PR body is not something any process legitimately emits
+    # there, and the closing tag adds no information. Matching it alone is
+    # linear and cannot be padded past.
+    - '(?is)<\s*tool[_\s]*call\s*>.{0,400}?<\s*/\s*tool[_\s]*call\s*>'
+    # What FOLLOWS the tag decides, and it cannot be padded past because it
+    # is the very next character. A forged call opens a payload; prose about
+    # the tag opens a word, so "The <tool_call> element is documented in the
+    # API reference" stays clean at any length.
+    - '(?i)<\s*(?:tool[_\s]*call|function[_\s]*call|invoke[_\s]*tool)\s*>[ \t]*(?:\r?\n[ \t]*)?(?=[{\[])'
+    - '(?im)^[ \t>*#\-]{0,8}<\s*/\s*tool[_\s]*call\s*>'
+    - '(?is)<\s*function[_\s]*call\s*>.{0,400}?<\s*/\s*function[_\s]*call\s*>'
+    - '(?is)<\s*invoke[_\s]*tool\s*>.{0,400}?<\s*/\s*invoke[_\s]*tool\s*>'
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, file_content, code_comment, stdin]
   remediation: "Reject. Real tool calls are emitted by the model, not embedded in user-supplied text."
 
 - id: tool.fake_json_tool_call
@@ -20,9 +39,14 @@
   severity: high
   description: "JSON object that mimics an OpenAI / Anthropic tool-call schema"
   patterns:
-    - '(?is)\{\s*"(?:tool_name|tool|function|name)"\s*:\s*"[a-zA-Z_][a-zA-Z0-9_\-]*"\s*,\s*"(?:arguments|parameters|input)"\s*:'
+    # A bare "tool" key is deliberately NOT here. It is not a key in either the
+    # OpenAI or the Anthropic tool-call schema, but it is ordinary config
+    # vocabulary - `{"tool": "formatter", "arguments": {"indent": 2}}` in a
+    # documented config block was a HIGH finding that failed the build.
+    # "name" stays: it IS the OpenAI function-call key.
+    - '(?is)\{\s*"(?:tool_name|function_name|function|name)"\s*:\s*"[a-zA-Z_][a-zA-Z0-9_\-]*"\s*,\s*"(?:arguments|parameters|input)"\s*:'
     - '(?is)\{\s*"type"\s*:\s*"tool_use"\s*,'
-  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: tool.mcp_uri
@@ -32,7 +56,7 @@
   patterns:
     - '\bmcp://[A-Za-z0-9._\-/]+'
     - '\bagent://[A-Za-z0-9._\-/]+'
-  surfaces: [branch_name, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, code_comment, stdin]
+  surfaces: [branch_name, commit_author, tag_name, commit_message, file_name, directory_name, pr_title, pr_body, issue_title, issue_body, code_comment, stdin]
   remediation: "Reject or sanitise. MCP URIs in PR metadata are not load-bearing for legitimate workflows."
 
 - id: tool.shell_in_name
@@ -44,7 +68,7 @@
     - '\$\([^)\n]{1,200}\)'  # $(...) command substitution
     - '\|\s*(?:bash|sh|zsh|cmd|pwsh|powershell)\b'
     - '&&\s*(?:rm|curl|wget|nc|bash)\b'
-  surfaces: [branch_name, tag_name, file_name, directory_name]
+  surfaces: [branch_name, commit_author, tag_name, file_name, directory_name]
   remediation: "Reject. Names are not expected to contain shell syntax."
 
 - id: tool.pretend_chat_turn
@@ -52,8 +76,24 @@
   severity: high
   description: "Text impersonates a chat turn boundary the agent might trust"
   patterns:
-    - '(?im)^\s*(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION)\s*:\s*(?:.{0,400})$'
-  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+    # WHICH SPEAKER is forged decides, not how many turns there are.
+    #
+    # A single "ASSISTANT:" line is an attack on its own: the attacker is
+    # writing the agent's own reply for it, and nobody puts that label in
+    # documentation. Requiring a second turn to fire broke exactly that case
+    # (fixtures 27 and 45) while fixing the false positives below.
+    - '(?m)^[ \t]*(?:ASSISTANT|Assistant|AI)[ \t]*:[ \t]*(?:.{0,400})$'
+    # USER / HUMAN / TOOL / FUNCTION alone are not. One labelled line is a
+    # table or a heading, and all three of these hard-failed a build at HIGH:
+    #   User: admin                    <- seeded-account docs
+    #   Function: parse_config(path)   <- an API reference
+    #   Tool: ripgrep                  <- a tooling table
+    # They become a forged transcript only in company, so require a SECOND
+    # turn by a DIFFERENT speaker. That keeps a column of "User: alice /
+    # User: bob" in a permissions table benign. Line counts are bounded so
+    # the pattern stays linear.
+    - '(?m)^[ \t]*(?P<speaker>USER|HUMAN|TOOL|FUNCTION|SYSTEM|User|Human|Tool|Function|System)[ \t]*:[ \t]*[^\n]{0,400}(?:\r?\n[^\n]{0,400}){0,6}?\r?\n[ \t]*(?!(?P=speaker)[ \t]*:)(?:USER|HUMAN|ASSISTANT|TOOL|FUNCTION|User|Human|Assistant|Tool|Function|SYSTEM|System)[ \t]*:'
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject. Untrusted text simulating a conversation turn is an injection precursor."
 
 - id: tool.openai_function_call
@@ -63,7 +103,7 @@
   patterns:
     - '(?is)"function_call"\s*:\s*\{\s*"name"\s*:\s*"[a-zA-Z_][a-zA-Z0-9_\-]*"'
     - '(?is)"tool_calls"\s*:\s*\[\s*\{\s*"(?:id|type|function)"'
-  surfaces: [pr_body, issue_body, file_content, commit_message, stdin]
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, code_comment, commit_message, stdin]
   remediation: "Reject."
 
 - id: tool.bracket_directive
@@ -71,6 +111,6 @@
   severity: medium
   description: "Bracketed pseudo-directive ([TOOL], [SYSTEM], [INSTRUCTION])"
   patterns:
-    - '(?im)^\s*\[\s*(?:TOOL|SYSTEM|INSTRUCTION|COMMAND|DIRECTIVE|ADMIN)\s*\]\s*(?:.{1,400})$'
-  surfaces: [pr_body, issue_body, file_content, commit_message, code_comment, stdin]
+    - '(?im)^[ \t]*\[[ \t]*(?:TOOL|SYSTEM|INSTRUCTION|COMMAND|DIRECTIVE|ADMIN)[ \t]*\][ \t]*(?:.{1,400})$'
+  surfaces: [pr_title, pr_body, issue_title, issue_body, file_content, commit_message, code_comment, stdin]
   remediation: "Reject."

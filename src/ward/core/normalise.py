@@ -58,6 +58,12 @@ _BASE64_URLSAFE_RE = re.compile(
 )
 _HEX_RE = re.compile(r"(?<![0-9a-fA-F])([0-9a-fA-F]{24,})(?![0-9a-fA-F])")
 
+# The separators git forces into branch, tag and file names. Replacing these
+# with spaces gives the blob patterns above a second view of the text in
+# which a prefixed payload - "feat/<base64>" - is no longer hidden behind a
+# character that belongs to base64's own alphabet.
+_IDENTIFIER_SEPARATOR_RE = re.compile(r"[/\\]+")
+
 # Recursive decoding bounds. Three layers of nested encoding is far more
 # than any real attacker would invest in, and the byte cap stops a
 # pathological input from snowballing the engine.
@@ -140,6 +146,39 @@ _CONFUSABLE_FOLD = str.maketrans(
         "ρ": "p",  # U+03C1
         "τ": "t",  # U+03C4
         "υ": "u",  # U+03C5
+        # Latin small capitals (U+1D00 block). A complete lookalike
+        # alphabet, and it was missing entirely - so a payload written in
+        # small caps read as English to a human and matched nothing, while
+        # every other homoglyph form was caught.
+        "ᴀ": "a",
+        "ʙ": "b",
+        "ᴄ": "c",
+        "ᴅ": "d",
+        "ᴇ": "e",
+        "ꜰ": "f",
+        "ɢ": "g",
+        "ʜ": "h",
+        "ɪ": "i",
+        "ᴊ": "j",
+        "ᴋ": "k",
+        "ʟ": "l",
+        "ᴍ": "m",
+        "ɴ": "n",
+        "ᴏ": "o",
+        "ᴘ": "p",
+        "ǫ": "q",
+        "ʀ": "r",
+        "ᴛ": "t",
+        "ᴜ": "u",
+        "ᴠ": "v",
+        "ᴡ": "w",
+        "ʏ": "y",
+        "ᴢ": "z",
+        # U+A731 SMALL CAPITAL S. The rest of the small-capital block was
+        # added last round to close a homoglyph evasion, and this one - the
+        # letter the example payload actually needed - was left out, so
+        # "ɪɢɴᴏʀᴇ all previouꜱ inꜱtructionꜱ" still scanned clean.
+        "ꜱ": "s",
         # Greek uppercase
         "Α": "A",
         "Β": "B",
@@ -157,6 +196,30 @@ _CONFUSABLE_FOLD = str.maketrans(
         "Ζ": "Z",
     }
 )
+
+
+def strip_combining_marks(text: str) -> str:
+    """Base characters with their combining marks removed.
+
+    NFKC composes what it can, but a mark with no precomposed form survives
+    untouched, and that is a one-character bypass of every text rule:
+
+        "I" + U+0332 COMBINING LOW LINE + "gnore all previous instructions"
+
+    renders as an underlined I, reads as "Ignore" to a model, and matches no
+    Latin-only pattern because the token is "I̲gnore".
+
+    THIS IS AN ADDITIONAL FORM, NOT A REPLACEMENT FOR THE TEXT. Doing it
+    inside normalise_text corrupted legitimate content: NFD decomposes
+    Cyrillic U+0439 into U+0438 plus a combining breve, so stripping marks
+    turned every Russian word containing it into a different word and broke
+    the multilingual detection outright. Marks are semantic in most of the
+    world's scripts and only suspicious in a Latin word that has no business
+    carrying one.
+    """
+    return "".join(
+        ch for ch in unicodedata.normalize("NFD", text) if unicodedata.category(ch) != "Mn"
+    )
 
 
 def confusable_fold(text: str) -> str:
@@ -185,13 +248,36 @@ _REPEAT_RE_TO_ONE = re.compile(r"([A-Za-z])\1{2,}")
 _REPEAT_RE_TO_TWO = re.compile(r"([A-Za-z])\1{3,}")
 
 
+def is_invisible(ch: str) -> bool:
+    """True if ``ch`` is a character that renders as nothing to a human.
+
+    Category-driven rather than a hand-written list. The named set above
+    covers 15 codepoints, but Unicode defines 51 in the Cf (format) category
+    alone, and the ones that were missing are exactly the ones an attacker
+    reaches for: U+00AD SOFT HYPHEN, and U+200E / U+200F (the LRM/RLM bidi
+    marks that Trojan Source is built on). "ig" + U+00AD + "nore all previous
+    instructions" used to scan completely clean.
+
+    Variation selectors are included too: they carry no visible glyph on
+    their own but do split a word for a regex.
+    """
+    cp = ord(ch)
+    if ch in _INVISIBLE_CHARS:
+        return True
+    if _TAG_BLOCK_START <= cp <= _TAG_BLOCK_END:
+        return True
+    if 0xFE00 <= cp <= 0xFE0F:  # VARIATION SELECTOR-1..16
+        return True
+    if 0xE0100 <= cp <= 0xE01EF:  # VARIATION SELECTOR-17..256
+        return True
+    # Cf covers the zero-width and bidi formatting characters. Exclude nothing:
+    # no Cf codepoint carries visible meaning in the metadata Ward scans.
+    return unicodedata.category(ch) == "Cf"
+
+
 def strip_invisible(text: str) -> str:
     """Remove zero-width, bidi-override, and Unicode TAG-block characters."""
-    return "".join(
-        ch
-        for ch in text
-        if ch not in _INVISIBLE_CHARS and not (_TAG_BLOCK_START <= ord(ch) <= _TAG_BLOCK_END)
-    )
+    return "".join(ch for ch in text if not is_invisible(ch))
 
 
 def contains_unicode_tag(text: str) -> list[tuple[int, str]]:
@@ -202,6 +288,9 @@ def contains_unicode_tag(text: str) -> list[tuple[int, str]]:
         if _TAG_BLOCK_START <= cp <= _TAG_BLOCK_END:
             hits.append((idx, f"U+{cp:04X}"))
     return hits
+
+
+_TAG_CHAR_RE = re.compile(r"[\U000e0000-\U000e007f]")
 
 
 def decode_unicode_tags(text: str) -> str:
@@ -225,28 +314,65 @@ def decode_unicode_tags(text: str) -> str:
     return "".join(parts)
 
 
+# Typographic apostrophes fold to ASCII so rules only ever have to spell the
+# ASCII form. macOS and iOS turn on smart quotes by default, and anything
+# pasted from Slack or Notion carries U+2019, so "Don't" and "Don’t" reach
+# Ward in roughly equal numbers. Without this fold, a rule guarding against
+# "don't forget your API key" fires on half of them.
+_APOSTROPHES = str.maketrans({"’": "'", "‘": "'", "ʼ": "'", "ʹ": "'"})
+
+
 def normalise_text(text: str) -> str:
-    """NFKC-normalise and strip invisible characters.
+    """NFKC-normalise, fold apostrophes and line endings, strip invisibles.
 
     Suitable for feeding to regex-based detectors that want to ignore visual
     obfuscation. Use ``contains_invisible`` against the raw text first if you
     want to flag the obfuscation itself.
+
+    LINE ENDINGS ARE FOLDED TO ``\\n`` HERE, deliberately, rather than by
+    adding ``\\r`` to each rule that cares. Several rules anchor on a sentence
+    boundary with a lookbehind like ``(?<=[.!?]\\n)``, and one of them had the
+    CRLF spelling and another did not - so the identical PR body scored HIGH
+    when authored on Linux and MEDIUM when authored on Windows, which is exit
+    2 versus exit 1, which is a blocked merge versus a passing job. Nobody
+    would find that from the rule text.
+
+    Patching each lookbehind fixes today's rules and not tomorrow's. Folding
+    once, at the single point every text rule reads from, means a rule author
+    cannot get it wrong. The raw form keeps its CRLF, so the obfuscation
+    detectors still see the real bytes.
     """
     nfkc = unicodedata.normalize("NFKC", text)
-    return strip_invisible(nfkc)
+    unified = nfkc.replace("\r\n", "\n").replace("\r", "\n")
+    return strip_invisible(unified.translate(_APOSTROPHES))
 
 
 def contains_invisible(text: str) -> list[tuple[int, str, str]]:
-    """Return positions of invisible characters as (index, char, codepoint)."""
+    """Return positions of invisible characters as (index, char, codepoint).
+
+    Uses the same predicate as :func:`strip_invisible` minus the TAG block,
+    which has its own dedicated rule and finding. Stripping a character
+    without being able to report it would mean silently repairing a payload
+    and never telling anyone it was there.
+    """
     hits: list[tuple[int, str, str]] = []
     for idx, ch in enumerate(text):
-        if ch in _INVISIBLE_CHARS:
+        if _TAG_BLOCK_START <= ord(ch) <= _TAG_BLOCK_END:
+            continue  # reported separately as obf.unicode_tag
+        if is_invisible(ch):
             hits.append((idx, ch, f"U+{ord(ch):04X}"))
     return hits
 
 
+# The capture is GREEDY and BOUNDED, and the trailing whitespace is
+# horizontal-only. The previous spelling - a lazy `+?` followed by `\s*` and
+# an alternation ending in `$` - was cubic against a run of spaces: the engine
+# tries every split of the run between the capture and the `\s*`, from every
+# start position. A single line reading "# ward-allow-file:" followed by 800
+# spaces and a "-" took 0.98s; 1,600 spaces took 7.7s, and that is a 1.6KB
+# file. Trailing whitespace is stripped by the caller instead.
 _WARD_ALLOW_RE = re.compile(
-    r"(?:<!--|//|#|/\*)\s*ward-allow-file\s*:\s*([^\n\->]+?)\s*(?:-->|\*/|$)",
+    r"(?:<!--|//|#|/\*)[ \t]*ward-allow-file[ \t]*:[ \t]*((?:(?!\*/)[^\n\->]){1,500})(?:-->|\*/|$)",
     re.MULTILINE,
 )
 
@@ -299,12 +425,48 @@ def decompose_spaced_runs(text: str) -> str:
 
     The all-single-spaces case ("i g n o r e p r e v i o u s") is NOT
     handled here because word boundaries cannot be recovered reliably.
+    See ``decompose_space_separated`` for the case where they can.
     """
 
     def _collapse(match: re.Match[str]) -> str:
         return re.sub(r"[\.\-_·]", "", match.group(0))
 
     return _INTRA_WORD_SPACED_RE.sub(_collapse, text)
+
+
+# A run of four or more single characters separated by exactly one space.
+# Four is enough to be unambiguous: "a b c" appears in ordinary prose (list
+# labels, musical keys, "grades A B C"), "i g n o r e" does not.
+_LONG_SPACED_RUN_RE = re.compile(r"(?<![^\s])(?:\S ){3,}\S(?![^\s])")
+# Two or more. Only ever applied to text already proven to be spaced out.
+_ANY_SPACED_RUN_RE = re.compile(r"(?<![^\s])(?:\S ){1,}\S(?![^\s])")
+
+
+def decompose_space_separated(text: str) -> str:
+    """Collapse space-separated letter runs, keeping word boundaries.
+
+    "i g n o r e  a l l  p r e v i o u s" -> "ignore all previous"
+
+    Spacing every character is the most obvious way to break a phrase up,
+    and it was the one shape ``decompose_spaced_runs`` did not cover - that
+    handles ".", "-" and "_" separators but not the space, because with a
+    single space everywhere the word boundaries are genuinely unrecoverable.
+
+    They ARE recoverable in the form an attacker actually writes, though:
+    two spaces between words and one between letters, because that is what
+    stays readable to the human being social-engineered.
+
+    Collapsing only long runs is not enough on its own. "i g n o r e  a l l
+    p r e v i o u s" left "a l l" untouched at three characters and the
+    phrase still did not match. But a threshold that low would fire on
+    "grades A B C" in ordinary prose. The way out is to decide ONCE per
+    string: a single run of four or more spaced characters is not something
+    prose does, and once that proves the text is deliberately spaced out,
+    every run in it can be collapsed - including the short ones.
+    """
+    if not _LONG_SPACED_RUN_RE.search(text):
+        return text
+    return _ANY_SPACED_RUN_RE.sub(lambda m: m.group(0).replace(" ", ""), text)
 
 
 def collapse_repeats(text: str, *, max_run: int = 1) -> str:
@@ -339,7 +501,11 @@ def evasion_forms(text: str) -> list[str]:
             forms.append(candidate)
 
     _add(deleet(text))
+    _add(strip_combining_marks(text))
+    _add(strip_combining_marks(deleet(text)))
     _add(decompose_spaced_runs(text))
+    _add(decompose_space_separated(text))
+    _add(decompose_space_separated(deleet(text)))
     _add(collapse_repeats(text, max_run=1))
     _add(collapse_repeats(text, max_run=2))
     # Confusable fold catches all-confusable tokens ("іgnοrе" -> "ignore")
@@ -352,10 +518,34 @@ def evasion_forms(text: str) -> list[str]:
     _add(collapse_repeats(decompose_spaced_runs(deleet(text)), max_run=2))
     # Confusable + deleet, in case "1gn0r3" with Cyrillic 'і' arrives.
     _add(confusable_fold(deleet(text)))
+    # Confusable + separator/repeat. confusable_fold was only ever applied to
+    # the raw text and to the de-leeted form, never composed with the
+    # separator transforms - so "і.g.n.о.r.e all previous instructions"
+    # (Cyrillic i and o, ASCII dots) defeated both defences at once while
+    # either alone was caught. Stacking two handled transforms is the cheapest
+    # move an attacker has.
+    folded = confusable_fold(text)
+    if folded != text:
+        _add(decompose_spaced_runs(folded))
+        _add(collapse_repeats(decompose_spaced_runs(folded), max_run=1))
+        _add(collapse_repeats(decompose_spaced_runs(deleet(folded)), max_run=1))
     # Unicode TAG block decode - smuggled instructions in the U+E0000
     # range become visible ASCII again.
     _add(decode_unicode_tags(text))
     return forms
+
+
+# Characters that separate words where a space cannot be used. A decoded
+# payload full of these is prose, not a hash - and identifier surfaces force
+# an attacker to use them, because git forbids spaces in ref names.
+_WORD_SEPARATORS = frozenset(" \t\n\r-_.,:;/+")
+# Unicode spaces count too. A payload joined by NO-BREAK SPACE or
+# IDEOGRAPHIC SPACE has word boundaries a reader can see and none this
+# gate could, so it was discarded as a hash.
+_WORD_SEPARATORS |= frozenset(
+    "\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007"
+    "\u2008\u2009\u200a\u202f\u205f\u3000"
+)
 
 
 def _looks_like_text(s: str) -> bool:
@@ -363,82 +553,141 @@ def _looks_like_text(s: str) -> bool:
 
     Lowering the base64/hex thresholds without a content gate would flag
     every commit SHA, every certificate fragment, every UUID concatenation.
-    The gate is intentionally cheap: most attack payloads contain spaces
-    and have a high printable ratio; most non-text byte salads do not.
+
+    THE COST OF THE TWO ERRORS IS NOT SYMMETRIC, and this gate used to be
+    tuned as though it were. It runs BEFORE rule matching, so keeping a
+    candidate that turns out to be a hash costs nothing - no rule matches it
+    and nothing is reported. Dropping a candidate that was really a payload
+    is a total bypass. So the gate should lean heavily towards keeping.
+
+    The old rule "16 or more characters and no whitespace means hash" failed
+    exactly that way: base64 of ``ignore-all-previous-instructions`` was
+    discarded for containing no spaces, and hyphenating before encoding was a
+    one-step bypass on the surface Ward exists to protect - git forbids
+    spaces in ref names, so every real branch-name payload is hyphenated.
     """
     if len(s) < 4:
         return False
     printable = sum(1 for ch in s if ch.isprintable() or ch in "\n\r\t")
     if printable / len(s) < 0.85:
         return False
-    # Long, dense, no whitespace - looks like a hash / token / cert.
-    return not (len(s) >= 16 and not any(ch.isspace() for ch in s))
+    if len(s) < 16:
+        return True
+    # A hash, token or certificate fragment is a long run with no word
+    # boundaries of any kind. Hyphens and underscores count as boundaries:
+    # "ignore-all-previous-instructions" is prose, "a3f8b2c1d9e4..." is not.
+    return any(ch in _WORD_SEPARATORS for ch in s)
 
 
-def _try_decodings(text: str) -> list[str]:
-    """One-pass decode attempts. Returns every decoded form (text-like or not).
+def _try_decodings(text: str) -> list[tuple[str, str]]:
+    """One-pass decode attempts, each tagged with the decoder that made it.
+
+    The tag is load-bearing, not bookkeeping. "whole" candidates are
+    transforms of the ENTIRE input (percent, HTML entity,
+    quoted-printable); "blob" candidates are the contents of an encoded
+    run found inside it. Only the latter can be a branch-shaped payload
+    whose words are hidden behind git separators, and only the latter may
+    have identifier-splitting applied - doing it to a whole document
+    deletes its sentence boundaries and fuses unrelated prose.
+
+    Returns every decoded form (text-like or not).
 
     The caller is responsible for deciding which to keep and which to
     recurse into.
     """
-    candidates: list[str] = []
+    candidates: list[tuple[str, str]] = []
 
     if "%" in text:
         try:
             decoded = urllib.parse.unquote(text, errors="strict")
             if decoded != text:
-                candidates.append(decoded)
+                candidates.append(("whole", decoded))
         except UnicodeDecodeError:
             pass
 
     if "&" in text:
         unescaped = html.unescape(text)
         if unescaped != text:
-            candidates.append(unescaped)
+            candidates.append(("whole", unescaped))
 
     if "=" in text:
         try:
             qp_bytes = quopri.decodestring(text.encode("ascii", errors="ignore"))
             qp_text = qp_bytes.decode("utf-8", errors="strict")
             if qp_text != text:
-                candidates.append(qp_text)
+                candidates.append(("whole", qp_text))
         except (UnicodeDecodeError, ValueError):
             pass
 
-    for match in _BASE64_RE.finditer(text):
-        blob = match.group(1)
-        try:
-            payload = base64.b64decode(blob, validate=True)
-            candidates.append(payload.decode("utf-8", errors="strict"))
-        except (binascii.Error, ValueError, UnicodeDecodeError):
-            continue
+    # Scan the text as given AND with identifier separators turned into
+    # spaces, keeping every blob either view finds.
+    #
+    # The blob patterns carry a negative lookbehind over their own alphabet,
+    # so that a match cannot start halfway along a longer run. But '/' and
+    # '+' belong to standard base64's alphabet and '-' and '_' to the
+    # URL-safe one, and all four are ALSO the separators git forces into ref
+    # names. The result was a one-character bypass on Ward's flagship
+    # surface: a bare base64 branch name was caught and the same payload
+    # behind the conventional "feat/" prefix scanned completely clean,
+    # because the '/' sat in the lookbehind.
+    #
+    # Scanning both views rather than replacing one with the other matters:
+    # the split view finds "feat/<blob>", the original still finds a genuine
+    # base64 blob with a '/' inside it. Neither can lose what the other saw.
+    views = [text]
+    split_view = _IDENTIFIER_SEPARATOR_RE.sub(" ", text)
+    if split_view != text:
+        views.append(split_view)
 
-    # URL-safe base64 (RFC 4648 sec 5): re-translate then try standard b64.
-    for match in _BASE64_URLSAFE_RE.finditer(text):
-        blob = match.group(1)
-        if "-" not in blob and "_" not in blob:
-            continue  # already covered by _BASE64_RE
-        translated = blob.translate(str.maketrans("-_", "+/"))
-        try:
-            payload = base64.b64decode(translated + "==", validate=False)
-            candidates.append(payload.decode("utf-8", errors="strict"))
-        except (binascii.Error, ValueError, UnicodeDecodeError):
-            continue
+    # Keyed by (decoder, blob), NOT by blob alone. A hex run is also a valid
+    # base64 run, so one shared set let the base64 loop claim the blob and
+    # silently skip the hex decode of the same characters - which is the
+    # decode that actually recovers the payload.
+    seen_blobs: set[tuple[str, str]] = set()
+    for view in views:
+        for match in _BASE64_RE.finditer(view):
+            blob = match.group(1)
+            if ("b64", blob) in seen_blobs:
+                continue
+            seen_blobs.add(("b64", blob))
+            try:
+                payload = base64.b64decode(blob, validate=True)
+                candidates.append(("blob", payload.decode("utf-8", errors="strict")))
+            except (binascii.Error, ValueError, UnicodeDecodeError):
+                continue
 
-    for match in _HEX_RE.finditer(text):
-        blob = match.group(1)
-        if len(blob) % 2 != 0:
-            continue
-        try:
-            payload = bytes.fromhex(blob)
-            candidates.append(payload.decode("utf-8", errors="strict"))
-        except (ValueError, UnicodeDecodeError):
-            continue
+        # URL-safe base64 (RFC 4648 sec 5): re-translate then try standard b64.
+        for match in _BASE64_URLSAFE_RE.finditer(view):
+            blob = match.group(1)
+            if "-" not in blob and "_" not in blob:
+                continue  # already covered by _BASE64_RE
+            if ("urlsafe", blob) in seen_blobs:
+                continue
+            seen_blobs.add(("urlsafe", blob))
+            translated = blob.translate(str.maketrans("-_", "+/"))
+            try:
+                payload = base64.b64decode(translated + "==", validate=False)
+                candidates.append(("blob", payload.decode("utf-8", errors="strict")))
+            except (binascii.Error, ValueError, UnicodeDecodeError):
+                continue
+
+        for match in _HEX_RE.finditer(view):
+            blob = match.group(1)
+            if len(blob) % 2 != 0 or ("hex", blob) in seen_blobs:
+                continue
+            seen_blobs.add(("hex", blob))
+            try:
+                payload = bytes.fromhex(blob)
+                candidates.append(("blob", payload.decode("utf-8", errors="strict")))
+            except (ValueError, UnicodeDecodeError):
+                continue
 
     return candidates
 
 
-def decode_candidates(text: str, *, _depth: int = 0, _budget: list[int] | None = None) -> list[str]:
+def _decode_candidates_tagged(
+    text: str, *, _depth: int = 0, _budget: list[int] | None = None
+) -> list[tuple[str, str]]:
     """Find encoded blocks and return their decoded UTF-8 forms.
 
     Handles base64 (standard and URL-safe), hex, URL-encoding, HTML
@@ -451,20 +700,86 @@ def decode_candidates(text: str, *, _depth: int = 0, _budget: list[int] | None =
     if _depth >= _MAX_DECODE_DEPTH:
         return []
     if _budget is None:
-        _budget = [_MAX_DECODE_BYTES]
+        # The budget exists to bound RECURSION, so it must not be spent merely
+        # by being handed a large input. It was a flat 64KB, and the
+        # whole-text transforms run first and cost ~len(text) each - so ONE
+        # percent-escape or HTML entity in a 66KB PR body drained it at depth
+        # zero and disabled all nested decoding. base64(base64(payload)) in a
+        # long body came back WARN instead of FAIL, and a single `%20` in a
+        # URL is enough to trigger it.
+        _budget = [max(_MAX_DECODE_BYTES, len(text) * 4)]
     if _budget[0] <= 0:
         return []
 
-    out: list[str] = []
-    for candidate in _try_decodings(text):
+    out: list[tuple[str, str]] = []
+    for kind, candidate in _try_decodings(text):
         if not candidate or candidate == text:
             continue
-        _budget[0] -= len(candidate)
-        if _budget[0] < 0:
-            break
+        # KEEP THE CANDIDATE BEFORE SPENDING ANY BUDGET. The budget exists to
+        # bound RECURSION, which is the only place work can snowball; the
+        # candidates at this level are already bounded by the number of regex
+        # matches, i.e. linear in the input.
+        #
+        # Charging for them and then `break`ing was a silent detection loss
+        # proportional to input size. _try_decodings returns whole-text
+        # transforms (percent, HTML entity, quoted-printable) BEFORE the
+        # base64 and hex matches, so a body of a few tens of KB spent the
+        # entire budget on passthrough forms and then abandoned the loop -
+        # never reaching the base64 blob at the end. A 39KB PR body with an
+        # encoded payload came back WARN instead of FAIL, and the Action
+        # passes a WARN. The bigger the surrounding text, the more reliably
+        # the payload was missed.
         if _looks_like_text(candidate):
-            out.append(candidate)
-        # Always recurse; an intermediate base64-of-base64 layer is dense
-        # and would fail the text gate, but its decoded child may not.
-        out.extend(decode_candidates(candidate, _depth=_depth + 1, _budget=_budget))
+            out.append((kind, candidate))
+        elif _TAG_CHAR_RE.search(candidate):
+            # A candidate made of Unicode TAG characters scores 0.00 on the
+            # printable ratio - every TAG codepoint is category Cf and
+            # str.isprintable() is False for the whole category - so the gate
+            # discarded the one payload class Ward rates CRITICAL when it is
+            # visible, and discarded it before anything downstream could
+            # decode it. percent, HTML-entity, base64 and hex wrappings of a
+            # TAG payload all scanned with zero findings.
+            #
+            # Loosening the ratio is not the lever: Cf carries no printable
+            # weight at any threshold. Decoding first is - what comes out is
+            # visible ASCII and passes the gate on its own merits.
+            #
+            # The search is the guard. Decoding every rejected candidate took
+            # 97KB of invisible-character soup from under a second to
+            # twenty-five, and the gate rejects a great deal that has no TAG
+            # character in it at all.
+            untagged = decode_unicode_tags(candidate)
+            if untagged != candidate and _looks_like_text(untagged):
+                out.append((kind, untagged))
+        _budget[0] -= len(candidate)
+        if _budget[0] <= 0:
+            # Stop going deeper, but keep scanning siblings at this level.
+            continue
+        # Recurse even when the candidate failed the text gate: an
+        # intermediate base64-of-base64 layer is dense and would fail it,
+        # but its decoded child may not.
+        # Each nested candidate keeps ITS OWN kind. Inheriting the outer
+        # one was wrong in the direction that loses detections: a base64 blob
+        # found inside a percent-encoded document is still a blob - an
+        # encoded run with a payload in it - but it inherited "whole" and so
+        # never got the identifier-split treatment. percent(base64(payload))
+        # scanned clean while base64(payload) was caught.
+        out.extend(_decode_candidates_tagged(candidate, _depth=_depth + 1, _budget=_budget))
     return out
+
+
+def decode_candidates(text: str) -> list[str]:
+    """Every decoded form of ``text``, in discovery order."""
+    return [form for _, form in _decode_candidates_tagged(text)]
+
+
+def decode_candidates_tagged(text: str) -> list[tuple[str, str]]:
+    """As :func:`decode_candidates`, but each form paired with its decoder.
+
+    ``"blob"`` means the form came out of an encoded run found inside the
+    input; ``"whole"`` means it is a transform of the entire input. Callers
+    that reshape a payload - splitting identifier separators, for instance -
+    must only do so to blob forms, because reshaping a whole document
+    destroys the sentence boundaries its rules depend on.
+    """
+    return _decode_candidates_tagged(text)

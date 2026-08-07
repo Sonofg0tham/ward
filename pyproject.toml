@@ -39,8 +39,12 @@ dependencies = [
   "rich>=13.7",
   "pyyaml>=6.0",
   "httpx>=0.27",
-  "pydantic>=2.7",
 ]
+# pydantic was declared here but imported nowhere. Every `pip install
+# ward-scanner` - including the composite action and every pre-commit hook
+# environment - pulled pydantic plus the pydantic-core Rust extension into a
+# CI runner for code that never used them. That is precisely the supply-chain
+# exposure Ward exists to reduce, so it is gone. Keep this list minimal.
 
 [project.optional-dependencies]
 dev = [
@@ -59,7 +63,14 @@ judge = [
   # Only needed for the optional LLM judge tier (`ward judge --engine anthropic`
   # and `ward bench --judge anthropic`). Ward's core is regex-only and has no
   # LLM dependency.
-  "anthropic>=0.40",
+  #
+  # 0.77 is the first release whose Messages.create accepts `output_config`,
+  # which anthropic_judge.py requires for structured outputs. Verified by
+  # inspecting the create() signature in each wheel, not assumed: 0.76 does
+  # not have it. The floor used to be 0.40, so an environment that already
+  # had any 0.4x-0.7x satisfied the constraint, pip declined to upgrade, and
+  # every judge call died with an unexpected-keyword TypeError.
+  "anthropic>=0.77",
 ]
 
 [project.scripts]
@@ -106,10 +117,17 @@ ignore = ["E501", "UP042"]
 "src/ward/demo.py" = ["RUF001", "RUF002", "RUF003"]
 "src/ward/selftest.py" = ["RUF001", "RUF002", "RUF003"]
 "src/ward/detectors/obfuscation.py" = ["RUF001", "RUF002", "RUF003"]
+"src/ward/detectors/base.py" = ["RUF001", "RUF002", "RUF003"]
+"src/ward/cli.py" = ["RUF001", "RUF002", "RUF003"]
 "src/ward/core/normalise.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_detectors.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_fail_closed.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_lab.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_normalise.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_encoding_bypasses.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_derived_form_parity.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_incomplete_checks_are_not_passes.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_multilingual_coverage.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 python_version = "3.11"
