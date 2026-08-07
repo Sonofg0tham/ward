@@ -15,6 +15,10 @@ is the downloaded upstream corpora.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0] - 2026-08-07
+
 A full-codebase audit (six parallel domain passes, each finding adversarially
 verified) produced 30 confirmed defects. Everything below came out of it or
 out of the release-readiness pass that preceded it.
@@ -676,7 +680,8 @@ Initial release.
 - Composite GitHub Action and pre-commit framework hooks.
 - Dependabot configuration.
 
-[Unreleased]: https://github.com/sonofg0tham/ward/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/sonofg0tham/ward/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sonofg0tham/ward/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/sonofg0tham/ward/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/sonofg0tham/ward/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/sonofg0tham/ward/compare/v0.2.0...v0.2.1
