@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import subprocess
 from collections.abc import Iterable
-from dataclasses import dataclass
 from pathlib import Path
 
 # File extensions whose content is treated as natural language by AI agents
@@ -36,16 +35,6 @@ CODE_SUFFIXES = frozenset(
         ".tf",
     }
 )
-
-
-@dataclass(frozen=True)
-class GitContext:
-    """Snapshot of untrusted strings from a git working tree."""
-
-    branch: str | None
-    head_sha: str | None
-    recent_commits: tuple[tuple[str, str], ...]  # (sha, message)
-    tags: tuple[str, ...] = ()
 
 
 class GitError(RuntimeError):

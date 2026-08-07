@@ -2,7 +2,7 @@
 # Consumers add a block like this to their own .pre-commit-config.yaml:
 #
 #   - repo: https://github.com/sonofg0tham/ward
-#     rev: v0.2.3
+#     rev: v0.3.0
 #     hooks:
 #       - id: ward-scan-local
 #         args: [--fail-on, high]

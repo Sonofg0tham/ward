@@ -38,7 +38,7 @@ body:
     attributes:
       label: Ward version
       description: Output of `ward version`.
-      placeholder: "0.2.3"
+      placeholder: "0.3.0"
     validations:
       required: true
 

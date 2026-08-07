@@ -33,8 +33,8 @@ traditional security tools ignore.
 The 0.0% FPR on 343 benign deepset rows is the strongest signal here.
 The numbers above are current trunk; the per-release reports under
 [`benchmark/`](benchmark/) are committed at tag time, most recently
-[`benchmark/v0.2.3-smoke.md`](benchmark/v0.2.3-smoke.md) and
-[`benchmark/v0.2.3-full.md`](benchmark/v0.2.3-full.md). Every PR gets its
+[`benchmark/v0.3.0-smoke.md`](benchmark/v0.3.0-smoke.md) and
+[`benchmark/v0.3.0-full.md`](benchmark/v0.3.0-full.md). Every PR gets its
 own bench-diff comment via the CI workflow (fork PRs get it in the
 bench-diff job log and artifact instead, since a fork's token cannot
 comment).
@@ -314,7 +314,7 @@ this into your `.pre-commit-config.yaml`:
 
 ```yaml
 - repo: https://github.com/sonofg0tham/ward
-  rev: v0.2.3
+  rev: v0.3.0
   hooks:
     - id: ward-scan-local
       args: [--fail-on, high]
@@ -339,7 +339,7 @@ permissions:
   security-events: write   # for the SARIF upload, which is on by default
 
 steps:
-  - uses: sonofg0tham/ward@v0.2.3
+  - uses: sonofg0tham/ward@v0.3.0
     with:
       fail-on: high
 ```
@@ -361,7 +361,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: sonofg0tham/ward@v0.2.3
+      - uses: sonofg0tham/ward@v0.3.0
         with:
           fail-on: high
           format: sarif

@@ -19,7 +19,7 @@ system prompt" so each row is a self-contained payload Ward can score.
 To run benchmarks against the FULL corpora rather than these samples:
 
 ```bash
-ward bench --download lakera     # fetches the full 777-row Lakera set
+ward bench --download lakera_ignore_instructions     # fetches the full 777-row Lakera set
 ```
 
 (Network-mode is on the v0.2 roadmap; v0.1.x ships smoke samples only.)

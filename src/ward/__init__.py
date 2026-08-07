@@ -18,7 +18,7 @@ from .core.engine import build_input, scan_inputs
 from .core.models import Finding, ScanInput, ScanReport, Severity, Surface, Verdict
 from .core.rules import RulePack, RulePackError, load_rule_pack
 
-__version__ = "0.2.3"
+__version__ = "0.3.0"
 
 __all__ = [
     "Finding",

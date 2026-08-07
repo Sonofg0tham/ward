@@ -182,6 +182,13 @@ _UNREADABLE_RUN = re.compile("[�\x00]+")
 # it produces a scan that says a chunk of that file was never read.
 _MAX_SCANNED_CHARS = 2_000_000
 
+# How much of a source file is screened. Top-of-file is where an instruction
+# aimed at a reading agent belongs, and scanning every line of every source
+# file is what made an early version too slow to keep in CI. Going past it is
+# REPORTED - see scan.partial_file - so the scan states its own coverage
+# rather than reporting clean over the part it never read.
+_CODE_HEAD_LINES = 40
+
 
 def _readable_text(text: str) -> str:
     """The parts of a file that decoded, with the undecodable runs removed.
@@ -597,7 +604,6 @@ def _read_text_file(path: Path) -> _Readings | None:
         primary=primary if readings else 0,
         lossless=lossless,
     )
-    return "\n".join(readings)
 
 
 def _load_pack(rule_pack: Path | None) -> RulePack:
@@ -923,6 +929,8 @@ def scan_local(
     # checks could not run on them. Named in the report rather than dropped -
     # a check Ward did not perform is a fact about the scan's coverage.
     unverified: set[str] = set()
+    # Source files whose tail was never screened, and how long they are.
+    partial: dict[str, int] = {}
     truncated: list[tuple[str, int]] = []
     for path in walk_tracked_files(repo):
         suffix = path.suffix.lower()
@@ -1037,7 +1045,15 @@ def scan_local(
                 if obf_suppress and idx == readings.primary:
                     unverified.add(relname)
                 # Top-of-file comments only - cheap, high signal.
-                top = "\n".join(content.splitlines()[:40])
+                # Top-of-file only, and the report SAYS SO below. A cap
+                # nobody is told about is the shape this codebase has already
+                # fixed twice - the 2 MB per-file cap and the encoding check
+                # both name what they could not read. Without it a payload on
+                # line 41 of a .py produced a clean, confident report.
+                lines = content.splitlines()
+                if idx == readings.primary and len(lines) > _CODE_HEAD_LINES:
+                    partial[relname] = len(lines)
+                top = "\n".join(lines[:_CODE_HEAD_LINES])
                 inputs.append(
                     build_input(
                         "code_comment",
@@ -1089,6 +1105,27 @@ def scan_local(
             ),
         )
         for name in unreadable
+    ]
+    extra += [
+        Finding(
+            rule_id="scan.partial_file",
+            detector="scan-local",
+            category="scan_integrity",
+            severity=Severity.MEDIUM,
+            message=(
+                f"Only the first {_CODE_HEAD_LINES} lines of this source file were "
+                f"screened ({total:,} lines total), so anything below that was not read"
+            ),
+            surface="code_comment",
+            location=name,
+            evidence=name,
+            remediation=(
+                "Source files are screened at the top only, where an instruction "
+                "aimed at an agent is worth planting. If this file needs reading in "
+                "full, scan it as documentation or split it."
+            ),
+        )
+        for name, total in sorted(partial.items())
     ]
     extra += [
         Finding(
@@ -1927,6 +1964,15 @@ def _heuristic_rule_doc(rule_id: str, _detector_cls: type) -> str | None:
             "Not a detection: a tracked file Ward could not read, so its contents\n"
             "were never scanned. Reported as a finding so the verdict cannot claim\n"
             "a clean result over a gap of unknown size."
+        ),
+        "scan.partial_file": (
+            "scan.partial_file\ncategory:    scan_integrity\nseverity:    medium\n"
+            "surfaces:    code_comment\n\n"
+            "Only the first 40 lines of this source file were screened. Top-of-file is\n"
+            "where an instruction aimed at a reading agent belongs, and reading every\n"
+            "line of every source file was too slow to keep in CI - but a cap nobody is\n"
+            "told about is a scan reporting clean over text it never read, so it is\n"
+            "named here instead. Scan the file as documentation if it needs reading whole."
         ),
         "scan.unverified_encoding": (
             "scan.unverified_encoding\ncategory:    scan_integrity\n"
