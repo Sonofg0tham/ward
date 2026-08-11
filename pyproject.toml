@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ward-scanner"
-version = "0.3.0"
+version = "0.3.1"
 description = "Pre-agent metadata scanner. Catches prompt injection in branch names, commits, PR titles, and other inputs before they reach an AI code reviewer."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -128,6 +128,7 @@ ignore = ["E501", "UP042"]
 "tests/test_derived_form_parity.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_incomplete_checks_are_not_passes.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_multilingual_coverage.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_dependabot_is_not_an_attacker.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 python_version = "3.11"

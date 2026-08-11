@@ -90,8 +90,29 @@ if [[ "${VERDICT}" == "warn" ]]; then
   fi
 fi
 
+# Exit 2 is ambiguous in the same way, and the corroboration above was only
+# ever applied to exit 1. Two IS Ward's FAIL. It is ALSO its fail-closed code
+# for never having run - a rule pack that will not load, an unreadable target,
+# a bad --severity-threshold. Both landed on VERDICT=fail.
+#
+# Nothing opened up, because the step exits non-zero either way. What broke is
+# what the step SAYS: workflows branching on the `verdict` output were told
+# injection HAD BEEN FOUND in a PR that was never scanned, and the upload step
+# published a zero-byte SARIF to Code Scanning. A genuine FAIL always leaves a
+# report, so an empty one separates the two cases with no guesswork.
+if [[ "${VERDICT}" == "fail" && ! -s "${OUTPUT}" ]]; then
+  echo "::error::Ward exited 2 and wrote no report - the scan did not complete. Failing closed."
+  VERDICT="error"
+fi
+
+# Publish an empty report path when there is no report, so the SARIF upload
+# step - guarded on `report != ''` - skips rather than failing the job a
+# second time on a file with nothing in it.
+REPORT_OUT="${OUTPUT}"
+[[ -s "${OUTPUT}" ]] || REPORT_OUT=""
+
 {
-  echo "report=${OUTPUT}"
+  echo "report=${REPORT_OUT}"
   echo "verdict=${VERDICT}"
 } >>"${GITHUB_OUTPUT}"
 

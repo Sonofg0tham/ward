@@ -80,23 +80,22 @@ _ZERO_WIDTH = {
 # that someone tried to hide it is thrown away.
 _ZERO_WIDTH_FALLBACK_LABEL = "invisible formatting character"
 
-# Characters whose innocence depends entirely on what they sit BETWEEN.
-#
-# ZWJ and ZWNJ are required in Persian, Arabic, Hindi and other Indic scripts,
-# and they are what binds a multi-part emoji together. LRM and RLM are the
-# ordinary way to keep a version number or a Latin word rendering correctly
-# inside Arabic or Hebrew prose. Flagging any of them outright fails a build
-# on completely legitimate text:
+# EVERY invisible character's innocence depends on what it sits BETWEEN. This
+# used to be a set - ZWJ, ZWNJ, LRM, RLM - because those are the ones required
+# in Persian, Arabic, Hindi and Indic scripts, and the ones that bind a
+# multi-part emoji together, so flagging them outright failed a build on
+# completely legitimate text:
 #   Fix the login retry loop 👨‍💻
 #   رفع می‌شود
-# What makes them suspicious is sitting between LATIN letters, where they have
-# no linguistic function whatsoever and the only reason to insert one is to
-# break a word up - "ig<ZWJ>nore all previous instructions".
 #
-# The bidi table below already excluded LRM/RLM for this reason, so reporting
-# them unconditionally here would have quietly undone that decision while
-# fixing a different bug.
-_CONTEXT_DEPENDENT = frozenset({"‌", "‍", "‎", "‏"})
+# Naming the four was the same mistake this project keeps making in its rule
+# packs: an enumerated list of the cases someone thought of. U+200B was not on
+# it, and U+200B is what Dependabot puts in front of every username it credits.
+# The test now lives in _first_invisible and applies to all of them - see its
+# docstring. What makes an invisible character suspicious is splitting a Latin
+# word, where it has no linguistic function and the only reason to insert one
+# is to break the word up ("ig<ZWJ>nore all previous instructions"), or
+# appearing in a run, which is the shape of hidden content.
 
 # Never reported, whatever their category. The variation selectors are what
 # make an emoji render in colour, so reporting them fails a build on "fix:
@@ -294,23 +293,66 @@ def _is_latin_letter(ch: str) -> bool:
 
 
 def _first_invisible(text: str) -> tuple[int, str, str] | None:
-    """First genuinely-hidden character, ignoring legitimate joiner use.
+    """First invisible character that actually does something.
 
     Driven by ``is_invisible`` rather than by the named table, so every
     character the normaliser strips is also one the scan can report. The named
     table only supplies a nicer label when it has one.
+
+    The presence of an invisible character is not by itself evidence of
+    anything, and reporting it as though it were flagged EVERY DEPENDABOT PR
+    ON GITHUB. Dependabot writes ``<code>@`` + U+200B + username in its
+    release-note credits so the mention does not notify the person; a routine
+    version bump therefore arrived carrying eleven zero-width spaces and came
+    back WARN. On this project's own terms that is the worse half of the
+    trade - a gate that flags every dependency update is a gate somebody turns
+    off, and then its recall is zero.
+
+    So the test is what the character DOES, which is not something an attacker
+    can choose favourably, rather than which character it is:
+
+    * It splits a Latin word. ``ig`` + U+00AD + ``nore`` defeats ``\\bignore\\b``
+      while reading as "ignore" to a human. Splitting a token IS the evasion,
+      so an attacker cannot avoid this test and still evade anything.
+    * It sits in a run of two or more. One invisible character carries no
+      payload; a sequence of them is the shape of hidden or encoded content,
+      and it is why ``06_pr_body_zero_width`` is a run rather than a single.
+
+    Anything else is inert: it does not break a token, so every content rule
+    still sees the words, and the normaliser strips it before the derived-form
+    scan regardless. This generalises the rule that used to apply only to
+    ``_CONTEXT_DEPENDENT`` - joiners were already exempt when not between
+    Latin letters, because Persian and Indic put them between non-Latin
+    characters by design. That reasoning was never specific to joiners.
+
+    Not covered, deliberately: many isolated inert characters spread thinly
+    enough to encode data by position. Catching that needs a density
+    threshold, and a threshold is a number the attacker reads off the source
+    and stays under - the same mistake as an enumerated word list. Such a
+    channel is also invisible to the model it would target, which strips
+    these characters before tokenising.
     """
+
+    def hidden(i: int) -> bool:
+        """Invisible, and not a variation selector we deliberately keep."""
+        if not 0 <= i < len(text):
+            return False
+        ch = text[i]
+        return is_invisible(ch) and ch not in _KEEP_VISIBLE
+
     for idx, ch in enumerate(text):
-        if not is_invisible(ch) or ch in _KEEP_VISIBLE:
+        if not hidden(idx):
             continue
-        if ch in _CONTEXT_DEPENDENT:
-            # Suspicious only between Latin letters. Persian, Indic and emoji
-            # sequences put these between non-Latin characters by design.
-            before = text[idx - 1] if idx else ""
-            after = text[idx + 1] if idx + 1 < len(text) else ""
-            if not (_is_latin_letter(before) and _is_latin_letter(after)):
-                continue
-        return idx, ch, _ZERO_WIDTH.get(ch, _ZERO_WIDTH_FALLBACK_LABEL)
+        # A run of two or more. Computed over the same set `hidden` uses, so a
+        # variation selector does not count towards it - otherwise the U+FE0F
+        # + U+200D in an ordinary emoji sequence (the rainbow flag is exactly
+        # this) would read as a run and every emoji in a PR title would flag.
+        if hidden(idx - 1) or hidden(idx + 1):
+            return idx, ch, _ZERO_WIDTH.get(ch, _ZERO_WIDTH_FALLBACK_LABEL)
+        before = text[idx - 1] if idx else ""
+        after = text[idx + 1] if idx + 1 < len(text) else ""
+        if _is_latin_letter(before) and _is_latin_letter(after):
+            return idx, ch, _ZERO_WIDTH.get(ch, _ZERO_WIDTH_FALLBACK_LABEL)
     return None
 
 

@@ -17,6 +17,63 @@ is the downloaded upstream corpora.
 
 Nothing yet.
 
+## [0.3.1] - 2026-08-11
+
+A false positive on every Dependabot pull request, and the discovery that the
+GitHub Action itself had never been executed by anything.
+
+### Fixed
+
+- **`obf.zero_width` flagged every Dependabot PR.** Dependabot writes its
+  release-note credits as `<code>@` + U+200B + username, so that crediting a
+  contributor does not fire a notification at them. A routine `actions/setup-python`
+  bump therefore arrived carrying eleven zero-width spaces and came back WARN
+  with nothing hidden and nothing evaded. At the default `fail-on: high` that
+  was noise the Action passes; at `fail-on: medium` it blocked every dependency
+  update in the repository. On this project's own stated terms a false positive
+  costs the same as a miss, because a gate that flags every dependency update is
+  a gate somebody switches off, and a gate that is off has zero recall.
+
+  The rule now tests what an invisible character *does* rather than which
+  character it is: it is reported when it splits a Latin word (`ig` + U+00AD +
+  `nore` defeats `\bignore\b` while reading as "ignore" to a human) or when it
+  sits in a run of two or more (the shape of hidden content). Splitting a token
+  *is* the evasion, so an attacker cannot avoid the test and still evade
+  anything. This generalises a rule that already existed for ZWJ/ZWNJ/LRM/RLM,
+  which were exempt when not between Latin letters because Persian and Indic
+  place them between non-Latin characters by design - reasoning that was never
+  specific to those four. Enumerating them was the same mistake the rule packs
+  kept making: a list of the cases someone thought of. U+200B was not on it.
+
+  Not addressed, deliberately: many isolated inert characters spaced out to
+  encode data by position. Catching that needs a density threshold, and a
+  threshold is a number an attacker reads off the source and stays under.
+
+- **A rule-pack error reported `verdict=fail`.** Exit 2 is Ward's FAIL and also
+  its fail-closed code for never having run. Both landed on `verdict=fail`, so
+  workflows branching on that output were told injection had been *found* in a
+  PR that was never scanned, and a zero-byte SARIF was handed to Code Scanning.
+  The corroboration the entrypoint already applied to exit 1 now covers exit 2:
+  a genuine FAIL always leaves a report, so an empty one separates the cases.
+  The job failed either way; nothing was open.
+
+### Added
+
+- **A CI job that runs the composite action.** `action.yml` was never executed
+  by anything - `tests/test_action_entrypoint.py` covers the entrypoint's
+  exit-code contract, but nothing checked that action.yml is a valid composite
+  action, that its inputs reach the entrypoint, or that its step outputs come
+  back. A broken input name or `runs:` block would have shipped green and been
+  found by a user. The job installs the checkout first, so a fix can be proven
+  by the PR that makes it rather than by the last release.
+
+- **Entrypoint coverage for the exit-2 branch**, plus the report output, the
+  job summary and the format defaults, in the existing entrypoint tests.
+
+- **`tests/test_dependabot_is_not_an_attacker.py`** - the real body of
+  `sonofg0tham/ward#10`, plus the inert positions that must stay silent and the
+  word-splitting and run cases that must not.
+
 ## [0.3.0] - 2026-08-07
 
 A full-codebase audit (six parallel domain passes, each finding adversarially
@@ -680,7 +737,8 @@ Initial release.
 - Composite GitHub Action and pre-commit framework hooks.
 - Dependabot configuration.
 
-[Unreleased]: https://github.com/sonofg0tham/ward/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/sonofg0tham/ward/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/sonofg0tham/ward/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sonofg0tham/ward/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/sonofg0tham/ward/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/sonofg0tham/ward/compare/v0.2.1...v0.2.2

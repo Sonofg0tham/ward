@@ -30,11 +30,18 @@ traditional security tools ignore.
 - **Optional LLM judge tier** recovers semantic injections regex
   structurally misses - measure the lift with `ward bench --judge`.
 
-The 0.0% FPR on 343 benign deepset rows is the strongest signal here.
+The 0.0% FPR on 343 benign deepset rows is the strongest signal here, but
+read it for what it is: a measurement against prose. It says nothing about
+the machine-generated text a scanner actually meets most often, and 0.3.1
+fixed a false positive on **every Dependabot PR** that those corpora, being
+prose, could never have surfaced. A benign corpus is evidence about the
+inputs it contains and no others.
+
 The numbers above are current trunk; the per-release reports under
 [`benchmark/`](benchmark/) are committed at tag time, most recently
 [`benchmark/v0.3.0-smoke.md`](benchmark/v0.3.0-smoke.md) and
-[`benchmark/v0.3.0-full.md`](benchmark/v0.3.0-full.md). Every PR gets its
+[`benchmark/v0.3.0-full.md`](benchmark/v0.3.0-full.md) - still current, as
+0.3.1 changed no detection outcome on any corpus row. Every PR gets its
 own bench-diff comment via the CI workflow (fork PRs get it in the
 bench-diff job log and artifact instead, since a fork's token cannot
 comment).
@@ -314,7 +321,7 @@ this into your `.pre-commit-config.yaml`:
 
 ```yaml
 - repo: https://github.com/sonofg0tham/ward
-  rev: v0.3.0
+  rev: v0.3.1
   hooks:
     - id: ward-scan-local
       args: [--fail-on, high]
@@ -339,7 +346,7 @@ permissions:
   security-events: write   # for the SARIF upload, which is on by default
 
 steps:
-  - uses: sonofg0tham/ward@v0.3.0
+  - uses: sonofg0tham/ward@v0.3.1
     with:
       fail-on: high
 ```
@@ -361,7 +368,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: sonofg0tham/ward@v0.3.0
+      - uses: sonofg0tham/ward@v0.3.1
         with:
           fail-on: high
           format: sarif
