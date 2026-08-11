@@ -42,10 +42,18 @@ build configuration - 0.3.1's fixes reach PyPI here.
   metadata version - the constraint is twine's - so both bounds move together
   when the publish action ships a newer one.
 
-## [0.3.1] - 2026-08-11
+## 0.3.1 - 2026-08-11 (withdrawn, never published)
 
 A false positive on every Dependabot pull request, and the discovery that the
 GitHub Action itself had never been executed by anything.
+
+**This version was never released.** Its upload to PyPI failed for the reason
+described under 0.3.2, leaving a tag whose `action.yml` required a
+`ward-scanner` version the index did not have, so the tag and its GitHub
+Release were deleted. Everything below shipped in 0.3.2 instead. It is kept
+as its own section because these are the changes, and folding them into a
+release note headed "release plumbing only" would hide them. There is no
+compare link because there is no longer a `v0.3.1` tag to compare against.
 
 ### Fixed
 
@@ -763,8 +771,7 @@ Initial release.
 - Dependabot configuration.
 
 [Unreleased]: https://github.com/sonofg0tham/ward/compare/v0.3.2...HEAD
-[0.3.2]: https://github.com/sonofg0tham/ward/compare/v0.3.1...v0.3.2
-[0.3.1]: https://github.com/sonofg0tham/ward/compare/v0.3.0...v0.3.1
+[0.3.2]: https://github.com/sonofg0tham/ward/compare/v0.3.0...v0.3.2
 [0.3.0]: https://github.com/sonofg0tham/ward/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/sonofg0tham/ward/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/sonofg0tham/ward/compare/v0.2.1...v0.2.2
