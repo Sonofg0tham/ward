@@ -34,6 +34,41 @@ jobs:
           python -m pip install --upgrade pip build
           python -m build
 
+      - name: The artefact must be one the publish step can actually accept
+        # v0.3.1 built green and died at the upload, after the GitHub Release
+        # had already been created - leaving a tag whose action.yml required a
+        # `ward-scanner` version PyPI did not have. The failure belongs here,
+        # where it costs a re-tag and nothing else.
+        #
+        # `twine check` alone would NOT have caught it: the twine resolved
+        # here is current and accepts 2.5 quite happily. What matters is the
+        # twine inside pypa/gh-action-pypi-publish, which is older. So assert
+        # the metadata version explicitly and keep the two coupled on purpose.
+        # When the publish action ships a newer twine, raise both this and the
+        # hatchling bound in pyproject.toml together.
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade twine
+          python -m twine check dist/*
+          metadata=$(python - <<'PY'
+          import glob, re, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          with zipfile.ZipFile(wheel) as z:
+              name = next(n for n in z.namelist() if n.endswith(".dist-info/METADATA"))
+              text = z.read(name).decode("utf-8", "replace")
+          print(re.search(r"^Metadata-Version:\s*(\S+)", text, re.M).group(1))
+          PY
+          )
+          echo "Metadata-Version: ${metadata}"
+          case "${metadata}" in
+            2.1|2.2|2.3|2.4) ;;
+            *)
+              echo "::error::Built Metadata-Version ${metadata}, which the publish action's twine will reject. Pin hatchling lower in pyproject.toml, or raise this guard once the action ships a newer twine."
+              exit 1
+              ;;
+          esac
+
       - name: Upload distribution artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

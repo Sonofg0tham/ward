@@ -1,10 +1,28 @@
 [build-system]
-requires = ["hatchling"]
+# PINNED, and the upper bound is load-bearing.
+#
+# The release job installs `build` and lets it resolve this fresh from PyPI on
+# every run, so the artefact depended on whatever was published that day.
+# hatchling 1.32.0 started emitting `Metadata-Version: 2.5`, and the twine
+# inside the pinned pypa/gh-action-pypi-publish rejects it:
+#
+#   InvalidDistribution: Invalid distribution metadata: '2.5' is not a valid
+#   metadata version
+#
+# v0.3.1 built green, produced a GitHub Release, and failed at the upload -
+# leaving a tag whose action.yml required `ward-scanner>=0.3.1` from a PyPI
+# that did not have it. Nothing was wrong with the code; the build was simply
+# not reproducible, which for a security tool is its own defect.
+#
+# 2.5 is a perfectly valid metadata version. The constraint is twine's, not
+# ours, so raise this bound once the publish action ships a twine that accepts
+# it - the guard in .github/workflows/release.yml will say so.
+requires = ["hatchling>=1.27,<1.32"]
 build-backend = "hatchling.build"
 
 [project]
 name = "ward-scanner"
-version = "0.3.1"
+version = "0.3.2"
 description = "Pre-agent metadata scanner. Catches prompt injection in branch names, commits, PR titles, and other inputs before they reach an AI code reviewer."
 readme = "README.md"
 requires-python = ">=3.11"

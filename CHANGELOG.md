@@ -17,6 +17,31 @@ is the downloaded upstream corpora.
 
 Nothing yet.
 
+## [0.3.2] - 2026-08-11
+
+Release plumbing only. No detection change, and no code change outside the
+build configuration - 0.3.1's fixes reach PyPI here.
+
+### Fixed
+
+- **The build was not reproducible, and it broke the 0.3.1 release.** The
+  release job installs `build` and lets it resolve hatchling fresh from PyPI on
+  every run, so the artefact depended on whatever was published that day.
+  hatchling 1.32.0 started emitting `Metadata-Version: 2.5`, which the twine
+  inside the pinned `pypa/gh-action-pypi-publish` rejects.
+
+  v0.3.1 therefore built green, created its GitHub Release, and died at the
+  upload - leaving a tag whose `action.yml` required `ward-scanner>=0.3.1` from
+  a PyPI that did not have it. Anyone pinning `sonofg0tham/ward@v0.3.1` would
+  have failed at the install step. Nothing was wrong with the code; the build
+  was simply not pinned, which for a security tool is its own defect.
+
+  `hatchling` is now pinned in `[build-system] requires`, and the release job
+  asserts the built metadata version before the publish job runs, so this class
+  of failure costs a re-tag instead of a broken published tag. 2.5 is a valid
+  metadata version - the constraint is twine's - so both bounds move together
+  when the publish action ships a newer one.
+
 ## [0.3.1] - 2026-08-11
 
 A false positive on every Dependabot pull request, and the discovery that the
@@ -737,7 +762,8 @@ Initial release.
 - Composite GitHub Action and pre-commit framework hooks.
 - Dependabot configuration.
 
-[Unreleased]: https://github.com/sonofg0tham/ward/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/sonofg0tham/ward/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/sonofg0tham/ward/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/sonofg0tham/ward/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sonofg0tham/ward/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/sonofg0tham/ward/compare/v0.2.2...v0.2.3
