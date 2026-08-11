@@ -321,7 +321,7 @@ this into your `.pre-commit-config.yaml`:
 
 ```yaml
 - repo: https://github.com/sonofg0tham/ward
-  rev: v0.3.1
+  rev: v0.3.2
   hooks:
     - id: ward-scan-local
       args: [--fail-on, high]
@@ -346,7 +346,7 @@ permissions:
   security-events: write   # for the SARIF upload, which is on by default
 
 steps:
-  - uses: sonofg0tham/ward@v0.3.1
+  - uses: sonofg0tham/ward@v0.3.2
     with:
       fail-on: high
 ```
@@ -368,7 +368,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: sonofg0tham/ward@v0.3.1
+      - uses: sonofg0tham/ward@v0.3.2
         with:
           fail-on: high
           format: sarif
